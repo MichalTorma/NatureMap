@@ -207,7 +207,7 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   list-style: none;
-  max-height: 200px;
+  max-height: 380px;
   overflow-y: auto;
   z-index: 2000;
   margin-top: 4px;
@@ -217,9 +217,65 @@ body {
   padding: 10px 14px;
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  grid-template-areas: 
+    "avatar title"
+    "avatar subtitle";
+  column-gap: 14px;
+  align-items: center;
+  transition: background 0.2s;
 }
 
 .search-results li:hover { background: rgba(59, 130, 246, 0.2); }
+
+.search-avatar {
+  grid-area: avatar;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.2);
+}
+.search-avatar i { width: 22px; height: 22px; }
+
+.search-title-row {
+  grid-area: title;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search-title-row .common { font-weight: 600; font-size: 0.9rem; color: #fff; }
+.search-title-row .scientific { font-style: italic; font-size: 0.75rem; color: rgba(255,255,255,0.6); }
+
+.scientific-rank {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.obs-count {
+  grid-area: subtitle;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.obs-count i { width: 12px; height: 12px; opacity: 0.7; }
 
 /* Timeline & Toggles */
 .filter-controls { display: flex; flex-direction: column; gap: 14px; }

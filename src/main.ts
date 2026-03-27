@@ -314,25 +314,62 @@ async function initMap() {
     };
 
     const fetchGbif = async (query: string) => {
-      const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`);
-      const suggestions = await res.json();
-      gbifResults.innerHTML = '';
-      if (suggestions.length > 0) {
-        gbifResults.style.display = 'block';
-        suggestions.slice(0, 5).forEach((s: any) => {
-          const li = document.createElement('li');
-          li.innerHTML = `<span class="common">${s.vernacularName || s.scientificName}</span><span class="scientific">${s.scientificName}</span>`;
-          li.addEventListener('click', () => {
-            currentTaxonKey = s.key;
-            const name = s.vernacularName || s.scientificName;
-            gbifSearch.value = name;
-            gbifResults.style.display = 'none';
-            saveToHistory({ key: s.key, name: name });
-            debouncedUpdateGbifLayer(10);
+      try {
+        const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`);
+        const suggestions = await res.json();
+        gbifResults.innerHTML = '';
+        if (suggestions.length > 0) {
+          gbifResults.style.display = 'block';
+          const top5 = suggestions.slice(0, 5);
+          
+          const richData = await Promise.all(top5.map(async (s: any) => {
+            try {
+              const occRes = await fetch(`https://api.gbif.org/v1/occurrence/search?taxonKey=${s.key}&limit=1&mediaType=StillImage`);
+              const occData = await occRes.json();
+              return { count: occData.count || 0, image: occData.results?.[0]?.media?.[0]?.identifier || '' };
+            } catch { return { count: 0, image: '' }; }
+          }));
+
+          top5.forEach((s: any, index: number) => {
+            const data = richData[index];
+            const li = document.createElement('li');
+            
+            const avatarHtml = data.image 
+              ? `<img src="${data.image}" class="search-avatar" alt="${s.canonicalName}" loading="lazy">`
+              : `<div class="search-avatar"><i data-lucide="leaf"></i></div>`;
+              
+            const rankHtml = s.rank ? `<span class="scientific-rank">${s.rank}</span>` : '';
+            const nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
+            
+            li.innerHTML = `
+              ${avatarHtml}
+              <div class="search-title-row">
+                <span class="common">${nameToUse}</span>
+                ${rankHtml}
+                <span class="scientific">${s.scientificName}</span>
+              </div>
+              <div class="obs-count">
+                <i data-lucide="globe"></i>
+                ${data.count.toLocaleString()} worldwide observations
+              </div>
+            `;
+            
+            li.addEventListener('click', () => {
+              currentTaxonKey = s.key;
+              gbifSearch.value = nameToUse;
+              gbifResults.style.display = 'none';
+              saveToHistory({ key: s.key, name: nameToUse });
+              debouncedUpdateGbifLayer(10);
+            });
+            gbifResults.appendChild(li);
           });
-          gbifResults.appendChild(li);
-        });
-      } else gbifResults.style.display = 'none';
+          LucideIcons.createIcons({ icons: iconsObject, root: gbifResults });
+        } else {
+            gbifResults.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Suggest API Error', e);
+      }
     };
 
     gbifSearch.addEventListener('input', () => {
