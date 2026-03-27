@@ -21,7 +21,7 @@ interface AppConfig {
   gbif: {
     defaultStyle: string;
     defaultTaxon: number;
-    availableStyles: { id: string; label: string }[];
+    availableStyles: { id: string; label: string; params: string }[];
   };
 }
 
@@ -72,7 +72,6 @@ async function initMap() {
     const checkLayerHealth = async (layerSpec: LayerConfig, btn: HTMLElement) => {
       const dot = btn.querySelector('.status-dot');
       try {
-        // Handle {s} subdomains (default to 'a') and {r} (default to empty)
         let testUrl = layerSpec.url
           .replace('{s}', 'a')
           .replace('{r}', '')
@@ -81,13 +80,16 @@ async function initMap() {
           .replace('{y}', '340');
           
         if (layerSpec.type === 'wms') {
-           // WMS: just check capabilities
            testUrl = layerSpec.url.split('?')[0] + '?SERVICE=WMS&REQUEST=GetCapabilities';
         }
         
-        await fetch(testUrl, { method: 'HEAD', mode: 'no-cors' });
-        // Since many providers are no-cors, we assume reachability if we get a response object
-        dot?.classList.add('online');
+        // Use 'cors' mode to get real status codes and avoid ORB noise
+        const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
+        if (res.ok) {
+          dot?.classList.add('online');
+        } else {
+          throw new Error('Offline');
+        }
       } catch (e) {
         dot?.classList.add('offline');
         btn.classList.add('offline');
@@ -95,9 +97,15 @@ async function initMap() {
     };
 
     config.layers.forEach((layerSpec) => {
+      const layerOptions = { 
+        ...layerSpec.options, 
+        errorTileUrl: '/error-tile.png',
+        crossOrigin: 'anonymous' // Enable CORS to avoid ORB blocks on errors
+      };
+
       const leafletLayer = layerSpec.type === 'wms' 
-        ? L.tileLayer.wms(layerSpec.url, layerSpec.options)
-        : L.tileLayer(layerSpec.url, { ...layerSpec.options, errorTileUrl: '/error-tile.png' });
+        ? L.tileLayer.wms(layerSpec.url, layerOptions)
+        : L.tileLayer(layerSpec.url, layerOptions);
       
       baseLayers[layerSpec.id] = leafletLayer;
       if (layerSpec.active) leafletLayer.addTo(map);
@@ -135,11 +143,21 @@ async function initMap() {
     // 4. GBIF Overlay Logic
     let gbifLayer: L.TileLayer | null = null;
     let currentTaxonKey = config.gbif.defaultTaxon;
-    let currentStyle = config.gbif.defaultStyle;
+    let currentStyleId = config.gbif.defaultStyle;
     let currentYear = 2025;
     let currentOrigins: string[] = ['HUMAN_OBSERVATION', 'ALL']; 
     let isPlaying = false;
     let playInterval: any;
+
+    const gbifSection = document.getElementById('gbif-section');
+    const gbifHeader = gbifSection?.querySelector('.section-header');
+    
+    // Add health status dot to GBIF section
+    if (gbifHeader) {
+      const dot = document.createElement('div');
+      dot.className = 'status-dot';
+      gbifHeader.appendChild(dot);
+    }
 
     const gbifSearch = document.getElementById('gbif-search') as HTMLInputElement;
     const gbifResults = document.getElementById('gbif-results') as HTMLElement;
@@ -154,23 +172,53 @@ async function initMap() {
       opt.value = s.id; opt.textContent = s.label;
       gbifStyleSelect.appendChild(opt);
     });
-    gbifStyleSelect.value = currentStyle;
+    gbifStyleSelect.value = currentStyleId;
+
+    const checkGbifHealth = async () => {
+      const dot = gbifHeader?.querySelector('.status-dot');
+      try {
+        const testUrl = `https://api.gbif.org/v2/map/occurrence/density/0/0/0.png?style=classic.poly&taxonKey=2435099`;
+        const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
+        if (res.ok) {
+          dot?.classList.add('online');
+        } else {
+          throw new Error('Offline');
+        }
+      } catch (e) {
+        dot?.classList.add('offline');
+      }
+    };
+    checkGbifHealth();
 
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
       
-      // Calculate Year Range: Cumulative from 1900
+      const styleConfig = config.gbif.availableStyles.find(s => s.id === currentStyleId);
+      const styleParams = styleConfig?.params || 'style=classic.poly';
+      
       const yearRange = `1900,${currentYear}`;
       
-      // Calculate Origins
       let originParam = '';
       if (!currentOrigins.includes('ALL')) {
         originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
       }
       
-      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@2x.png?style=${currentStyle}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
-      gbifLayer = L.tileLayer(url, { opacity: 0.8 }).addTo(map);
+      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}.png?${styleParams}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
+      gbifLayer = L.tileLayer(url, { 
+        opacity: 0.8,
+        attribution: '&copy; GBIF',
+        crossOrigin: 'anonymous' // Enable CORS to avoid ORB blocks on errors (404s)
+      }).addTo(map);
     };
+    
+    let updateTimeout: any;
+    const debouncedUpdateGbifLayer = (delay = 300) => {
+      clearTimeout(updateTimeout);
+      updateTimeout = setTimeout(() => updateGbifLayer(), delay);
+    };
+
+    // Set initial UI state
+    gbifSearch.value = "Puma"; 
     updateGbifLayer();
 
     const fetchGbif = async (query: string) => {
@@ -186,7 +234,7 @@ async function initMap() {
             currentTaxonKey = s.key;
             gbifSearch.value = s.vernacularName || s.scientificName;
             gbifResults.style.display = 'none';
-            updateGbifLayer();
+            debouncedUpdateGbifLayer(10); // Nearly immediate but through common pipe
           });
           gbifResults.appendChild(li);
         });
@@ -198,14 +246,21 @@ async function initMap() {
       clearTimeout(searchTimeout);
       const query = gbifSearch.value.trim();
       if (query.length < 3) { gbifResults.style.display = 'none'; return; }
-      searchTimeout = setTimeout(() => fetchGbif(query), 400);
+      searchTimeout = setTimeout(() => fetchGbif(query), 600); // 600ms debounce
     });
 
-    gbifStyleSelect.addEventListener('change', () => { currentStyle = gbifStyleSelect.value; updateGbifLayer(); });
+    gbifStyleSelect.addEventListener('change', () => { 
+      currentStyleId = gbifStyleSelect.value; 
+      debouncedUpdateGbifLayer(100); 
+    });
+    
+    // Split input (visual) from change (network update) to reduce API pressure
     gbifYearInput.addEventListener('input', () => {
       currentYear = parseInt(gbifYearInput.value);
       yearValueDisplay.textContent = currentYear.toString();
-      updateGbifLayer();
+    });
+    gbifYearInput.addEventListener('change', () => {
+      debouncedUpdateGbifLayer(200);
     });
 
     // Playback Animation Loop
@@ -235,7 +290,7 @@ async function initMap() {
             gbifYearInput.value = currentYear.toString();
             yearValueDisplay.textContent = currentYear.toString();
             updateGbifLayer();
-          }, 800);
+          }, 1200); // 1200ms interval for stable grid generation
         } else {
           clearInterval(playInterval);
         }
@@ -268,7 +323,7 @@ async function initMap() {
             document.querySelector('[data-value="ALL"]')?.classList.add('active');
           }
         }
-        updateGbifLayer();
+        debouncedUpdateGbifLayer(400); // Debounce origin toggles
       });
     });
 

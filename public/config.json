@@ -63,24 +63,28 @@
       }
     },
     {
-      "id": "test",
+      "id": "voyager",
       "type": "xyz",
-      "label": "Test Layer",
-      "icon": "Beaker",
-      "url": "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
+      "label": "Voyager",
+      "icon": "Compass",
+      "url": "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png",
       "options": {
-        "attribution": "Map tiles by <a href='http://stamen.com'>Stamen Design</a>, under <a href='http://creativecommons.org/licenses/by/3.0'>CC BY 3.0</a>. Data by <a href='http://openstreetmap.org'>OpenStreetMap</a>, under <a href='http://www.openstreetmap.org/copyright'>ODbL</a>."
+        "attribution": "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/attributions'>CARTO</a>",
+        "subdomains": "abcd",
+        "maxZoom": 20
       }
     }
   ],
   "gbif": {
-    "defaultStyle": "purpleHeat.point",
-    "defaultTaxon": 1,
+    "defaultTaxon": 2435099,
+    "defaultStyle": "hex",
     "availableStyles": [
-      {"id": "purpleHeat.point", "label": "Heatmap (Purple)"},
-      {"id": "fire.poly", "label": "Density (Fire)"},
-      {"id": "classic.poly", "label": "Classic Clusters"},
-      {"id": "glacier.point", "label": "Cold Points"}
+      { "id": "hex", "label": "Scientific Hexagons", "params": "bin=hex&hexPerTile=45&style=classic.poly" },
+      { "id": "hex_green", "label": "Eco Hexagons (Green)", "params": "bin=hex&hexPerTile=35&style=green.poly" },
+      { "id": "square", "label": "Square Grid", "params": "bin=square&squareSize=128&style=outline.poly" },
+      { "id": "heatmap", "label": "Global Heatmap", "params": "style=classic.heatmap" },
+      { "id": "point", "label": "Fire Points", "params": "style=purpleHeat.point" },
+      { "id": "point_red", "label": "Classic Dots", "params": "style=classic.point" }
     ]
   }
 }
