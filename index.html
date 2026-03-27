@@ -11,6 +11,9 @@
     
     <!-- Floating Location Controls (Always reachable bottom-right) -->
     <div id="location-control" class="location-control floating">
+      <button id="share-btn" class="locate-fab" aria-label="Share Map Link" title="Copy mapped view to clipboard">
+        <i data-lucide="link"></i>
+      </button>
       <button id="locate-btn" class="locate-fab" aria-label="Find My Location">
         <i data-lucide="locate"></i>
       </button>
@@ -92,11 +95,20 @@
               </div>
               <div class="advanced-drawer" id="advanced-drawer" style="display: none;">
                 <div class="control-group">
-                  <div class="label-row">
-                    <span class="label">Grid Density</span>
-                    <span id="density-value" class="val-tag">Med</span>
+                  <div class="label-row" style="margin-bottom: 8px;">
+                    <span class="label" title="How the grid visually responds when zooming the map">Scale Behavior</span>
                   </div>
-                  <input type="range" id="gbif-density" min="20" max="80" value="45" step="5">
+                  <div id="gbif-scale-mode" class="button-toggle-group">
+                    <button class="toggle-btn active" data-mode="static" title="Hexagons always remain the same visual size on your screen">Static Area</button>
+                    <button class="toggle-btn" data-mode="geographic" title="Hexagons expand visually to lock onto their physical geographic boundaries">Geo Locked</button>
+                  </div>
+                </div>
+                <div class="control-group" style="padding-top: 10px;">
+                  <div class="label-row">
+                    <span class="label" title="Base number of bins per map tile">Base Resolution</span>
+                    <span id="density-value" class="val-tag">45 Bins</span>
+                  </div>
+                  <input type="range" id="gbif-density" min="10" max="150" value="45" step="1">
                 </div>
                 <div class="control-group">
                   <div class="label-row">

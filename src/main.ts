@@ -38,23 +38,62 @@ async function initMap() {
     if (!response.ok) throw new Error('Failed to load config.json');
     const config: AppConfig = await response.json();
 
-    // 1. Storage Helpers
+    // 1. URL & Storage Initialization
+    const urlParams = new URLSearchParams(window.location.search);
     const STORAGE_KEY_CENTER = 'mymap_center';
     const STORAGE_KEY_ZOOM = 'mymap_zoom';
     const savedCenter = localStorage.getItem(STORAGE_KEY_CENTER);
     const savedZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
-    const initialCenter: [number, number] = savedCenter ? JSON.parse(savedCenter) : config.mapOptions.center;
-    const initialZoom = savedZoom ? parseInt(savedZoom) : config.mapOptions.zoom;
+    
+    // Core App State
+    let gbifLayer: L.TileLayer | null = null;
+    let currentTaxonKey: number | null = urlParams.has('taxon') ? parseInt(urlParams.get('taxon')!) : null;
+    let currentShape = urlParams.get('shape') || 'hex';
+    let currentPalette = urlParams.get('palette') || 'classic';
+    let currentDensity = urlParams.has('density') ? parseInt(urlParams.get('density')!) : 45;
+    let currentScaleMode = urlParams.get('scale') || 'static';
+    let currentOpacity = urlParams.has('opacity') ? parseFloat(urlParams.get('opacity')!) : 0.8;
+    let currentYear: number | 'ALL' = urlParams.has('year') ? (urlParams.get('year') === 'ALL' ? 'ALL' : parseInt(urlParams.get('year')!)) : 'ALL';
+    let currentOrigins: string[] = urlParams.has('origins') ? urlParams.get('origins')!.split(',') : ['HUMAN_OBSERVATION', 'ALL']; 
+    let isPlaying = false;
+    let playInterval: any;
+    
+    const initialLat = urlParams.has('lat') ? parseFloat(urlParams.get('lat')!) : (savedCenter ? JSON.parse(savedCenter)[0] : config.mapOptions.center[0]);
+    const initialLng = urlParams.has('lng') ? parseFloat(urlParams.get('lng')!) : (savedCenter ? JSON.parse(savedCenter)[1] : config.mapOptions.center[1]);
+    const initialCenter: L.LatLngTuple = [initialLat, initialLng];
+    const initialZoom = urlParams.has('z') ? parseInt(urlParams.get('z')!) : (savedZoom ? parseInt(savedZoom) : config.mapOptions.zoom);
 
     // 2. Initialize Map
     const map = L.map('map', { center: initialCenter, zoom: initialZoom, layers: [] });
+    // URL Serializer
+    const syncStateToURL = () => {
+      const p = new URLSearchParams();
+      const center = map.getCenter();
+      p.set('lat', center.lat.toFixed(4));
+      p.set('lng', center.lng.toFixed(4));
+      p.set('z', map.getZoom().toString());
+      if (currentTaxonKey) p.set('taxon', currentTaxonKey.toString());
+      p.set('shape', currentShape);
+      p.set('palette', currentPalette);
+      p.set('density', currentDensity.toString());
+      p.set('scale', currentScaleMode);
+      p.set('opacity', currentOpacity.toString());
+      p.set('year', currentYear.toString());
+      p.set('origins', currentOrigins.join(','));
+      window.history.replaceState(null, '', `?${p.toString()}`);
+    };
+
     const saveState = () => {
       const center = map.getCenter();
       localStorage.setItem(STORAGE_KEY_CENTER, JSON.stringify([center.lat, center.lng]));
       localStorage.setItem(STORAGE_KEY_ZOOM, map.getZoom().toString());
+      syncStateToURL();
     };
     map.on('moveend', saveState);
     map.on('zoomend', saveState);
+
+    // Initial load URL push if needed
+    if (urlParams.toString() !== '') syncStateToURL();
 
     // 3. Layer Management
     const baseLayers: Record<string, L.Layer> = {};
@@ -83,16 +122,35 @@ async function initMap() {
     });
 
     // 4. GBIF Biodiversity Core Logic
-    let gbifLayer: L.TileLayer | null = null;
-    let currentTaxonKey: number | null = null;
-    let currentShape = 'hex';
-    let currentPalette = 'classic';
-    let currentDensity = 45;
-    let currentOpacity = 0.8;
-    let currentYear: number | 'ALL' = 'ALL';
-    let currentOrigins: string[] = ['HUMAN_OBSERVATION', 'ALL']; 
-    let isPlaying = false;
-    let playInterval: any;
+
+    const GbifLayerClass = L.TileLayer.extend({
+      getTileUrl: function(coords: any) {
+        let url = L.TileLayer.prototype.getTileUrl.call(this, coords);
+        const shape = this.options.gbifShape;
+        const baseDensity = this.options.gbifDensity;
+        
+        if (this.options.gbifGridMode === 'geographic') {
+            const z = this._getZoomForUrl ? this._getZoomForUrl() : coords.z;
+            if (shape === 'hex') {
+                const dynamicDensity = Math.max(1, Math.round(baseDensity / Math.pow(2, z)));
+                url += `&bin=hex&hexPerTile=${dynamicDensity}`;
+            } else if (shape === 'square') {
+                const baseSize = 4096 / baseDensity;
+                const scaledSize = Math.min(4096, baseSize * Math.pow(2, z));
+                const p2 = Math.pow(2, Math.round(Math.log2(scaledSize)));
+                url += `&bin=square&squareSize=${p2}`;
+            }
+        } else {
+            if (shape === 'hex') url += `&bin=hex&hexPerTile=${baseDensity}`;
+            if (shape === 'square') {
+                const baseSize = 4096 / baseDensity;
+                const p2 = Math.pow(2, Math.round(Math.log2(baseSize)));
+                url += `&bin=square&squareSize=${p2}`;
+            }
+        }
+        return url;
+      }
+    });
 
     const gbifSection = document.getElementById('gbif-section');
     const gbifHeader = gbifSection?.querySelector('.section-header');
@@ -128,27 +186,21 @@ async function initMap() {
       
       switch(palette) {
         case 'classic':
-          return isBinned ? 'classic.poly' : 'classic.point';
+          return isBinned ? 'classic-noborder.poly' : 'classic.point';
         case 'green':
-          return isBinned ? 'green.poly' : (isHeatmap ? 'greenHeat.point' : 'green.point');
+          return isBinned ? 'green-noborder.poly' : (isHeatmap ? 'greenHeat.point' : 'green.point');
         case 'blue':
           // Ocean Palette -> 'classic-noborder' uses a deep blue/cyan scaling for polygons.
           return isBinned ? 'classic-noborder.poly' : 'blueHeat.point'; 
         case 'orange':
-          // Fire Palette -> 'red' is the official corresponding native GBIF polygon ramp for heat.
+          // Fire Palette -> 'red' is the official corresponding native GBIF polygon ramp. (No 'noborder' variant exists natively)
           return isBinned ? 'red.poly' : (isHeatmap ? 'orangeHeat.point' : 'fire.point');
         case 'purpleHeat':
-          // Royal Palette -> 'purpleYellow' is the officially supported high-visibility binning ramp.
-          return isBinned ? 'purpleYellow.poly' : 'purpleHeat.point';
+          // Royal Palette -> 'purpleYellow-noborder' is the officially supported contiguous binning ramp.
+          return isBinned ? 'purpleYellow-noborder.poly' : 'purpleHeat.point';
         default:
           return 'classic.point';
       }
-    };
-
-    const getBinParam = (shape: string, density: number): string => {
-      if (shape === 'hex') return `&bin=hex&hexPerTile=${density}`;
-      if (shape === 'square') return `&bin=square&squareSize=${density === 45 ? 128 : (density > 50 ? 64 : 256)}`;
-      return '';
     };
 
     // History Logic
@@ -194,7 +246,9 @@ async function initMap() {
     // Style Validation Logic
     const checkStyleCapability = async (shape: string, palette: string): Promise<boolean> => {
       const styleParam = resolveGbifStyle(palette, shape);
-      const binParam = getBinParam(shape, 30); // Test at base resolution
+      let binParam = '';
+      if (shape === 'hex') binParam = '&bin=hex&hexPerTile=30';
+      if (shape === 'square') binParam = '&bin=square&squareSize=128';
       const testUrl = `https://api.gbif.org/v2/map/occurrence/adhoc/0/0/0@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}&taxonKey=1`;
       try {
         const res = await fetch(testUrl, { mode: 'cors' });
@@ -230,19 +284,27 @@ async function initMap() {
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
       const styleParam = resolveGbifStyle(currentPalette, currentShape);
-      const binParam = getBinParam(currentShape, currentDensity);
       const yearParam = currentYear === 'ALL' ? '' : `&year=1900,${currentYear}`;
       let originParam = '';
       if (!currentOrigins.includes('ALL')) originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
       const taxonParam = currentTaxonKey ? `&taxonKey=${currentTaxonKey}` : '';
-      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}${taxonParam}${yearParam}${originParam}`;
-      gbifLayer = L.tileLayer(url, { 
+      
+      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${taxonParam}${yearParam}${originParam}`;
+      
+      const maxNative = currentScaleMode === 'geographic' && (currentShape === 'hex' || currentShape === 'square') ? 14 : ((currentShape === 'hex' || currentShape === 'square') ? 9 : 14);
+
+      gbifLayer = new (GbifLayerClass as any)(url, { 
         opacity: currentOpacity, 
         attribution: '&copy; GBIF', 
         crossOrigin: 'anonymous',
         zIndex: 10,
+        maxNativeZoom: maxNative,
+        gbifShape: currentShape,
+        gbifDensity: currentDensity,
+        gbifGridMode: currentScaleMode,
         errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
       }).addTo(map);
+      syncStateToURL();
     };
 
     let updateTimeout: any;
@@ -312,8 +374,23 @@ async function initMap() {
 
     densityInput.addEventListener('input', () => {
       currentDensity = parseInt(densityInput.value);
-      if (densityValueTag) densityValueTag.textContent = currentDensity > 60 ? 'High' : (currentDensity < 30 ? 'Low' : 'Med');
-      debouncedUpdateGbifLayer(400);
+      if (densityValueTag) densityValueTag.textContent = `${currentDensity} Bins`;
+      debouncedUpdateGbifLayer(200);
+    });
+
+    const scaleBtns = document.querySelectorAll('#gbif-scale-mode .toggle-btn');
+    scaleBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        scaleBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentScaleMode = btn.getAttribute('data-mode') || 'static';
+        // When dynamic geometry is active, clear out testing tag to avoid confusion
+        if (currentScaleMode === 'geographic' && paletteStatusTag) {
+            paletteStatusTag.textContent = 'Geo Active';
+            paletteStatusTag.className = 'val-tag status-tag online';
+        }
+        debouncedUpdateGbifLayer(100);
+      });
     });
 
     opacityInput.addEventListener('input', () => {
@@ -398,6 +475,48 @@ async function initMap() {
       const pulseIcon = L.divIcon({ className: 'user-location-marker', html: '<div class="pulse-marker"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
       if (userMarker) userMarker.setLatLng(e.latlng);
       else userMarker = L.marker(e.latlng, { icon: pulseIcon }).addTo(map);
+    });
+
+    const shareBtn = document.getElementById('share-btn');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          const icon = shareBtn.querySelector('i');
+          if (icon) icon.setAttribute('data-lucide', 'check');
+          shareBtn.classList.add('copied');
+          shareBtn.setAttribute('title', 'Copied to Clipboard!');
+          LucideIcons.createIcons({ icons: iconsObject });
+          setTimeout(() => {
+            shareBtn.classList.remove('copied');
+            if (icon) icon.setAttribute('data-lucide', 'link');
+            shareBtn.setAttribute('title', 'Copy Map Link');
+            LucideIcons.createIcons({ icons: iconsObject });
+          }, 2000);
+        } catch (e) {
+          console.error('Failed to copy', e);
+        }
+      });
+    }
+
+    // Connect Deep-Link variables to UI Inputs visually
+    if (gbifYearInput) gbifYearInput.value = currentYear === 'ALL' ? '2025' : currentYear.toString();
+    if (yearValueDisplay) yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
+    if (densityInput) densityInput.value = currentDensity.toString();
+    if (densityValueTag) densityValueTag.textContent = `${currentDensity} Bins`;
+    if (opacityInput) opacityInput.value = currentOpacity.toString();
+    if (opacityValueTag) opacityValueTag.textContent = `${Math.round(currentOpacity * 100)}%`;
+    document.querySelectorAll('#gbif-origin .toggle-btn').forEach(b => {
+      b.classList.toggle('active', currentOrigins.includes(b.getAttribute('data-value') || ''));
+    });
+    document.querySelectorAll('#gbif-shape .toggle-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-shape') === currentShape);
+    });
+    document.querySelectorAll('#gbif-scale-mode .toggle-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-mode') === currentScaleMode);
+    });
+    document.querySelectorAll('#gbif-palette .palette-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-palette') === currentPalette);
     });
 
     // 5. UI Interactivity (Mobile Toggles & Collapsibles)
