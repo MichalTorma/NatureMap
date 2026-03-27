@@ -62,8 +62,8 @@ async function initMap() {
 
     config.layers.forEach((layerSpec) => {
       const leafletLayer = layerSpec.type === 'wms' 
-        ? L.tileLayer.wms(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous' })
-        : L.tileLayer(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous' });
+        ? L.tileLayer.wms(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous', zIndex: 0 })
+        : L.tileLayer(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous', zIndex: 0 });
       baseLayers[layerSpec.id] = leafletLayer;
       if (layerSpec.active) leafletLayer.addTo(map);
 
@@ -240,6 +240,7 @@ async function initMap() {
         opacity: currentOpacity, 
         attribution: '&copy; GBIF', 
         crossOrigin: 'anonymous',
+        zIndex: 10,
         errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
       }).addTo(map);
     };
