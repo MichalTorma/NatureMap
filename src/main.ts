@@ -177,7 +177,8 @@ async function initMap() {
     const checkGbifHealth = async () => {
       const dot = gbifHeader?.querySelector('.status-dot');
       try {
-        const testUrl = `https://api.gbif.org/v2/map/occurrence/density/0/0/0.png?style=classic.poly&taxonKey=2435099`;
+        // Use a stable V1 API endpoint for the heartbeat to ensure a clean console and accurate status
+        const testUrl = `https://api.gbif.org/v1/species/2435099`;
         const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
         if (res.ok) {
           dot?.classList.add('online');
@@ -203,11 +204,13 @@ async function initMap() {
         originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
       }
       
-      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}.png?${styleParams}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
+      // Use v2 with srs=EPSG:3857 and @1x spec for most robust Varnish routing
+      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?srs=EPSG:3857&${styleParams}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
       gbifLayer = L.tileLayer(url, { 
         opacity: 0.8,
         attribution: '&copy; GBIF',
-        crossOrigin: 'anonymous' // Enable CORS to avoid ORB blocks on errors (404s)
+        crossOrigin: 'anonymous', // Enable CORS to avoid ORB blocks on errors (404s)
+        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' // Silent handling for expected 404s
       }).addTo(map);
     };
     
