@@ -8,41 +8,73 @@
   </head>
   <body>
     <div id="map"></div>
-    <div id="ui-panel" class="glass-panel">
-      <h2>MAP STYLING</h2>
-      <p class="subtitle">Select your base layer</p>
+    
+    <!-- Floating Location Controls (Always reachable bottom-right) -->
+    <div id="location-control" class="location-control floating">
+      <button id="locate-btn" class="locate-fab" aria-label="Find My Location">
+        <i data-lucide="locate"></i>
+      </button>
+      <div id="privacy-badge" class="privacy-notice mini">
+        <i data-lucide="shield-check"></i>
+        <div class="tooltip">Anonymous & Private: We don't track you.</div>
+      </div>
+    </div>
+
+    <div id="ui-panel" class="glass-panel collapsed">
+      <div class="drag-handle"></div>
       
-      <div id="layer-options" class="layer-options">
-        <!-- Buttons will be injected here dynamically from config.json -->
+      <div class="panel-header">
+        <h1>MAP STYLING</h1>
+        <p class="subtitle desktop-only">Configure your mapping experience</p>
+      </div>
+
+      <div class="ui-section collapsible active" id="styling-section">
+        <div class="section-header">
+          <h2>BASE LAYERS</h2>
+          <i data-lucide="chevron-down" class="chevron"></i>
+        </div>
+        <div class="section-content">
+          <div id="layer-options" class="layer-options">
+            <!-- Buttons will be injected here dynamically -->
+          </div>
+        </div>
       </div>
       
-      <div id="gbif-section" class="ui-section gbif-section">
-        <h2>BIODIVERSITY</h2>
-        <div class="search-container">
-          <input type="text" id="gbif-search" placeholder="Search species (e.g. Puma)...">
-          <ul id="gbif-results" class="search-results"></ul>
+      <div class="ui-section collapsible" id="gbif-section">
+        <div class="section-header">
+          <h2>BIODIVERSITY</h2>
+          <i data-lucide="chevron-down" class="chevron"></i>
         </div>
-        <div class="filter-controls">
-          <div class="control-group">
-            <span class="label">Style</span>
-            <select id="gbif-style"></select>
+        <div class="section-content">
+          <div class="search-container">
+            <input type="text" id="gbif-search" placeholder="Search species (e.g. Puma)..." autocomplete="off">
+            <ul id="gbif-results" class="search-results"></ul>
           </div>
-          <div class="control-group">
-            <span class="label">Year</span>
-            <input type="range" id="gbif-year" min="1900" max="2025" value="2025">
-            <span id="year-value">2025</span>
+          
+          <div class="filter-controls">
+            <div class="control-group">
+              <span class="label">Style</span>
+              <select id="gbif-style"></select>
+            </div>
+            
+            <div class="control-group">
+              <span class="label">Timeline</span>
+              <div class="timeline-control">
+                <button id="gbif-play" class="play-btn"><i data-lucide="play"></i></button>
+                <input type="range" id="gbif-year" min="1900" max="2025" value="2000" step="1">
+                <span id="year-value">2025</span>
+              </div>
+            </div>
+            
+            <div class="control-group">
+              <span class="label">Origin</span>
+              <div id="gbif-origin" class="button-toggle-group">
+                <button class="toggle-btn active" data-value="HUMAN_OBSERVATION">Human</button>
+                <button class="toggle-btn" data-value="PRESERVED_SPECIMEN">Museum</button>
+                <button class="toggle-btn active" data-value="ALL">All</button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      
-      <div id="location-control" class="location-control">
-        <button id="locate-btn" class="layer-btn secondary" aria-label="Find My Location">
-          <i data-lucide="locate"></i>
-          <span>Find Me</span>
-        </button>
-        <div class="privacy-notice">
-          <i data-lucide="shield-check"></i>
-          <span class="tooltip">Anonymous & Private: We don't track you. Only tile providers see anonymous requests for map areas.</span>
         </div>
       </div>
     </div>

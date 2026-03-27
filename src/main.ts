@@ -31,14 +31,33 @@ async function initMap() {
     if (!response.ok) throw new Error('Failed to load config.json');
     const config: AppConfig = await response.json();
 
-    // 1. Initialize Map
+    // 1. Storage Helpers
+    const STORAGE_KEY_CENTER = 'mymap_center';
+    const STORAGE_KEY_ZOOM = 'mymap_zoom';
+    
+    const savedCenter = localStorage.getItem(STORAGE_KEY_CENTER);
+    const savedZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
+    
+    const initialCenter: [number, number] = savedCenter ? JSON.parse(savedCenter) : config.mapOptions.center;
+    const initialZoom = savedZoom ? parseInt(savedZoom) : config.mapOptions.zoom;
+
+    // 2. Initialize Map
     const map = L.map('map', {
-      center: config.mapOptions.center,
-      zoom: config.mapOptions.zoom,
+      center: initialCenter,
+      zoom: initialZoom,
       layers: [] 
     });
 
-    // 2. Map Layer Factory & Initialization
+    // Save State on Change
+    const saveState = () => {
+      const center = map.getCenter();
+      localStorage.setItem(STORAGE_KEY_CENTER, JSON.stringify([center.lat, center.lng]));
+      localStorage.setItem(STORAGE_KEY_ZOOM, map.getZoom().toString());
+    };
+    map.on('moveend', saveState);
+    map.on('zoomend', saveState);
+
+    // 3. Health & Layer Management
     const baseLayers: Record<string, L.Layer> = {};
     const layerContainer = document.getElementById('layer-options');
 
@@ -50,48 +69,89 @@ async function initMap() {
       }
     }
 
+    const checkLayerHealth = async (layerSpec: LayerConfig, btn: HTMLElement) => {
+      const dot = btn.querySelector('.status-dot');
+      try {
+        // Handle {s} subdomains (default to 'a') and {r} (default to empty)
+        let testUrl = layerSpec.url
+          .replace('{s}', 'a')
+          .replace('{r}', '')
+          .replace('{z}', '10')
+          .replace('{x}', '511')
+          .replace('{y}', '340');
+          
+        if (layerSpec.type === 'wms') {
+           // WMS: just check capabilities
+           testUrl = layerSpec.url.split('?')[0] + '?SERVICE=WMS&REQUEST=GetCapabilities';
+        }
+        
+        await fetch(testUrl, { method: 'HEAD', mode: 'no-cors' });
+        // Since many providers are no-cors, we assume reachability if we get a response object
+        dot?.classList.add('online');
+      } catch (e) {
+        dot?.classList.add('offline');
+        btn.classList.add('offline');
+      }
+    };
+
     config.layers.forEach((layerSpec) => {
       const leafletLayer = layerSpec.type === 'wms' 
         ? L.tileLayer.wms(layerSpec.url, layerSpec.options)
-        : L.tileLayer(layerSpec.url, layerSpec.options);
+        : L.tileLayer(layerSpec.url, { ...layerSpec.options, errorTileUrl: '/error-tile.png' });
       
       baseLayers[layerSpec.id] = leafletLayer;
       if (layerSpec.active) leafletLayer.addTo(map);
+
+      // Handle Live Errors
+      leafletLayer.on('tileerror', () => {
+        const btn = document.querySelector(`[data-layer="${layerSpec.id}"]`);
+        const dot = btn?.querySelector('.status-dot');
+        dot?.classList.remove('online');
+        dot?.classList.add('offline');
+        btn?.classList.add('offline');
+      });
 
       if (layerContainer) {
         const btn = document.createElement('button');
         btn.className = `layer-btn ${layerSpec.active ? 'active' : ''}`;
         btn.setAttribute('data-layer', layerSpec.id);
-        btn.innerHTML = `<i data-lucide="${layerSpec.icon}"></i><span>${layerSpec.label}</span>`;
+        btn.innerHTML = `<div class="status-dot"></div><i data-lucide="${layerSpec.icon}"></i><span>${layerSpec.label}</span>`;
         layerContainer.appendChild(btn);
 
         btn.addEventListener('click', (e) => {
           e.preventDefault();
+          if (btn.classList.contains('offline')) return;
           Object.values(baseLayers).forEach(l => map.removeLayer(l));
           leafletLayer.addTo(map);
           document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         });
+
+        // Run Pre-flight Health Check
+        checkLayerHealth(layerSpec, btn);
       }
     });
 
-    // 3. GBIF Implementation
+    // 4. GBIF Overlay Logic
     let gbifLayer: L.TileLayer | null = null;
     let currentTaxonKey = config.gbif.defaultTaxon;
     let currentStyle = config.gbif.defaultStyle;
     let currentYear = 2025;
+    let currentOrigins: string[] = ['HUMAN_OBSERVATION', 'ALL']; 
+    let isPlaying = false;
+    let playInterval: any;
 
     const gbifSearch = document.getElementById('gbif-search') as HTMLInputElement;
     const gbifResults = document.getElementById('gbif-results') as HTMLElement;
     const gbifStyleSelect = document.getElementById('gbif-style') as HTMLSelectElement;
     const gbifYearInput = document.getElementById('gbif-year') as HTMLInputElement;
     const yearValueDisplay = document.getElementById('year-value') as HTMLElement;
+    const playBtn = document.getElementById('gbif-play');
+    const originBtns = document.querySelectorAll('#gbif-origin .toggle-btn');
 
-    // Populate styles
     config.gbif.availableStyles.forEach(s => {
       const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = s.label;
+      opt.value = s.id; opt.textContent = s.label;
       gbifStyleSelect.appendChild(opt);
     });
     gbifStyleSelect.value = currentStyle;
@@ -99,73 +159,120 @@ async function initMap() {
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
       
-      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@2x.png?style=${currentStyle}&taxonKey=${currentTaxonKey}&year=${currentYear}`;
-      gbifLayer = L.tileLayer(url, {
-        opacity: 0.8,
-        attribution: 'Observations &copy; <a href="https://www.gbif.org">GBIF</a>'
-      }).addTo(map);
+      // Calculate Year Range: Cumulative from 1900
+      const yearRange = `1900,${currentYear}`;
+      
+      // Calculate Origins
+      let originParam = '';
+      if (!currentOrigins.includes('ALL')) {
+        originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
+      }
+      
+      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@2x.png?style=${currentStyle}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
+      gbifLayer = L.tileLayer(url, { opacity: 0.8 }).addTo(map);
     };
-
-    // Initial load
     updateGbifLayer();
 
-    // GBIF UI Events
-    gbifStyleSelect.addEventListener('change', () => {
-      currentStyle = gbifStyleSelect.value;
-      updateGbifLayer();
+    const fetchGbif = async (query: string) => {
+      const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`);
+      const suggestions = await res.json();
+      gbifResults.innerHTML = '';
+      if (suggestions.length > 0) {
+        gbifResults.style.display = 'block';
+        suggestions.slice(0, 5).forEach((s: any) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span class="common">${s.vernacularName || s.scientificName}</span><span class="scientific">${s.scientificName}</span>`;
+          li.addEventListener('click', () => {
+            currentTaxonKey = s.key;
+            gbifSearch.value = s.vernacularName || s.scientificName;
+            gbifResults.style.display = 'none';
+            updateGbifLayer();
+          });
+          gbifResults.appendChild(li);
+        });
+      } else gbifResults.style.display = 'none';
+    };
+
+    let searchTimeout: any;
+    gbifSearch.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const query = gbifSearch.value.trim();
+      if (query.length < 3) { gbifResults.style.display = 'none'; return; }
+      searchTimeout = setTimeout(() => fetchGbif(query), 400);
     });
 
+    gbifStyleSelect.addEventListener('change', () => { currentStyle = gbifStyleSelect.value; updateGbifLayer(); });
     gbifYearInput.addEventListener('input', () => {
       currentYear = parseInt(gbifYearInput.value);
       yearValueDisplay.textContent = currentYear.toString();
       updateGbifLayer();
     });
 
-    // Species Search with debouncing
-    let searchTimeout: any;
-    gbifSearch.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      const query = gbifSearch.value.trim();
-      if (query.length < 3) {
-        gbifResults.style.display = 'none';
-        return;
-      }
+    // Playback Animation Loop
+    if (playBtn) {
+      playBtn.addEventListener('click', () => {
+        isPlaying = !isPlaying;
+        playBtn.classList.toggle('playing', isPlaying);
+        const icon = playBtn.querySelector('i');
+        if (icon) icon.setAttribute('data-lucide', isPlaying ? 'square' : 'play');
+        LucideIcons.createIcons({ icons: iconsObject });
 
-      searchTimeout = setTimeout(async () => {
-        const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`);
-        const suggestions = await res.json();
-        
-        gbifResults.innerHTML = '';
-        if (suggestions.length > 0) {
-          gbifResults.style.display = 'block';
-          suggestions.slice(0, 5).forEach((s: any) => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-              <span class="common">${s.vernacularName || s.scientificName}</span>
-              <span class="scientific">${s.scientificName}</span>
-            `;
-            li.addEventListener('click', () => {
-              currentTaxonKey = s.key;
-              gbifSearch.value = s.vernacularName || s.scientificName;
-              gbifResults.style.display = 'none';
-              updateGbifLayer();
-            });
-            gbifResults.appendChild(li);
-          });
+        if (isPlaying) {
+          if (currentYear >= 2025) {
+             currentYear = 1900;
+             gbifYearInput.value = "1900";
+          }
+          playInterval = setInterval(() => {
+            currentYear += 2; // Step by 2 years for speed
+            if (currentYear > 2025) {
+              currentYear = 2025;
+              isPlaying = false;
+              clearInterval(playInterval);
+              playBtn.classList.remove('playing');
+              if (icon) icon.setAttribute('data-lucide', 'play');
+              LucideIcons.createIcons({ icons: iconsObject });
+            }
+            gbifYearInput.value = currentYear.toString();
+            yearValueDisplay.textContent = currentYear.toString();
+            updateGbifLayer();
+          }, 800);
         } else {
-          gbifResults.style.display = 'none';
+          clearInterval(playInterval);
         }
-      }, 400);
+      });
+    }
+
+    // Origin Toggles
+    originBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const value = btn.getAttribute('data-value') || 'ALL';
+        
+        if (value === 'ALL') {
+          currentOrigins = ['ALL'];
+          originBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        } else {
+          document.querySelector('[data-value="ALL"]')?.classList.remove('active');
+          if (currentOrigins.includes('ALL')) currentOrigins = [];
+          
+          if (currentOrigins.includes(value)) {
+            currentOrigins = currentOrigins.filter(v => v !== value);
+            btn.classList.remove('active');
+          } else {
+            currentOrigins.push(value);
+            btn.classList.add('active');
+          }
+          
+          if (currentOrigins.length === 0) {
+            currentOrigins = ['ALL'];
+            document.querySelector('[data-value="ALL"]')?.classList.add('active');
+          }
+        }
+        updateGbifLayer();
+      });
     });
 
-    // Close results on click outside
-    document.addEventListener('click', (e) => {
-      if (!gbifSearch.contains(e.target as Node)) {
-        gbifResults.style.display = 'none';
-      }
-    });
-
-    // 4. Geolocation Implementation
+    // 5. Geolocation Implementation & Smart Startup
     const locateBtn = document.getElementById('locate-btn');
     let userMarker: L.Marker | null = null;
     if (locateBtn) {
@@ -174,6 +281,12 @@ async function initMap() {
         map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
       });
     }
+    
+    // Auto-locate on startup if no saved session
+    if (!savedCenter) {
+      map.locate({ setView: true, maxZoom: 13 });
+    }
+
     map.on('locationfound', (e) => {
       if (locateBtn) locateBtn.classList.remove('loading');
       const pulseIcon = L.divIcon({
@@ -185,9 +298,29 @@ async function initMap() {
       if (userMarker) userMarker.setLatLng(e.latlng);
       else userMarker = L.marker(e.latlng, { icon: pulseIcon }).addTo(map);
     });
-    map.on('locationerror', (e) => {
-      if (locateBtn) locateBtn.classList.remove('loading');
-      alert(`Location access denied or unavailable: ${e.message}`);
+
+    // 6. Responsive UI Interactivity
+    const uiPanel = document.getElementById('ui-panel');
+    const panelHeader = uiPanel?.querySelector('.panel-header');
+    
+    // Toggle Bottom Sheet on Mobile
+    if (panelHeader) {
+      panelHeader.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          uiPanel?.classList.toggle('collapsed');
+        }
+      });
+    }
+
+    // Toggle Collapsible Sections
+    const collapsibles = document.querySelectorAll('.collapsible');
+    collapsibles.forEach(section => {
+      const header = section.querySelector('.section-header');
+      header?.addEventListener('click', () => {
+        // Optional: Close others
+        // collapsibles.forEach(s => s.classList.remove('active'));
+        section.classList.toggle('active');
+      });
     });
 
     // Final Icons refresh
