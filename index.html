@@ -15,6 +15,36 @@
       <div id="layer-options" class="layer-options">
         <!-- Buttons will be injected here dynamically from config.json -->
       </div>
+      
+      <div id="gbif-section" class="ui-section gbif-section">
+        <h2>BIODIVERSITY</h2>
+        <div class="search-container">
+          <input type="text" id="gbif-search" placeholder="Search species (e.g. Puma)...">
+          <ul id="gbif-results" class="search-results"></ul>
+        </div>
+        <div class="filter-controls">
+          <div class="control-group">
+            <span class="label">Style</span>
+            <select id="gbif-style"></select>
+          </div>
+          <div class="control-group">
+            <span class="label">Year</span>
+            <input type="range" id="gbif-year" min="1900" max="2025" value="2025">
+            <span id="year-value">2025</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="location-control" class="location-control">
+        <button id="locate-btn" class="layer-btn secondary" aria-label="Find My Location">
+          <i data-lucide="locate"></i>
+          <span>Find Me</span>
+        </button>
+        <div class="privacy-notice">
+          <i data-lucide="shield-check"></i>
+          <span class="tooltip">Anonymous & Private: We don't track you. Only tile providers see anonymous requests for map areas.</span>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

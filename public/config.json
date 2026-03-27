@@ -72,5 +72,15 @@
         "attribution": "Map tiles by <a href='http://stamen.com'>Stamen Design</a>, under <a href='http://creativecommons.org/licenses/by/3.0'>CC BY 3.0</a>. Data by <a href='http://openstreetmap.org'>OpenStreetMap</a>, under <a href='http://www.openstreetmap.org/copyright'>ODbL</a>."
       }
     }
-  ]
+  ],
+  "gbif": {
+    "defaultStyle": "purpleHeat.point",
+    "defaultTaxon": 1,
+    "availableStyles": [
+      {"id": "purpleHeat.point", "label": "Heatmap (Purple)"},
+      {"id": "fire.poly", "label": "Density (Fire)"},
+      {"id": "classic.poly", "label": "Classic Clusters"},
+      {"id": "glacier.point", "label": "Cold Points"}
+    ]
+  }
 }
