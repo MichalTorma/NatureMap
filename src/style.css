@@ -1,0 +1,134 @@
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --bg-color: #0f1115;
+  --text-color: #e2e8f0;
+  --accent-color: #3b82f6;
+  --panel-bg: rgba(15, 23, 42, 0.65);
+  --panel-border: rgba(255, 255, 255, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* Leaflet map z-index base */
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 320px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 24px;
+  z-index: 1000; /* Above Leaflet map */
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  color: white;
+}
+
+.glass-panel h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.glass-panel .subtitle {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 24px;
+}
+
+/* Layer Buttons */
+.layer-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.layer-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px 12px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.layer-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.layer-btn i {
+  width: 24px;
+  height: 24px;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.layer-btn span {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.layer-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+}
+
+.layer-btn.active i {
+  stroke: var(--accent-color);
+  opacity: 1;
+}
+
+/* Custom Leaflet overrides for dark mode feel */
+.leaflet-control-zoom a {
+  background-color: var(--panel-bg) !important;
+  color: white !important;
+  border-color: var(--panel-border) !important;
+  backdrop-filter: blur(8px);
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.leaflet-container .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px 0 0 0;
+  backdrop-filter: blur(4px);
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: #60a5fa;
+}
