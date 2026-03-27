@@ -1,62 +1,110 @@
 import './style.css';
 import L from 'leaflet';
-import { createIcons, Map as MapIcon, Moon, Mountain, Satellite } from 'lucide';
+import * as LucideIcons from 'lucide';
 
-// Initialize Icons
-createIcons({
-  icons: {
-    map: MapIcon,
-    moon: Moon,
-    mountain: Mountain,
-    satellite: Satellite
-  }
-});
+interface LayerConfig {
+  id: string;
+  type: 'xyz' | 'wms';
+  label: string;
+  icon: string;
+  active?: boolean;
+  url: string;
+  options?: any;
+}
 
-// Configure base map layers
-const layers = {
-  osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }),
-  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20
-  }),
-  topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-    maxZoom: 17,
-    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-  }),
-  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-  })
-};
+interface AppConfig {
+  mapOptions: {
+    center: [number, number];
+    zoom: number;
+  };
+  layers: LayerConfig[];
+}
 
-// Initialize Map
-const map = L.map('map', {
-  center: [37.7749, -122.4194], // Default to SF
-  zoom: 13,
-  layers: [layers.osm] // Standard layer by default
-});
+async function initMap() {
+  try {
+    const response = await fetch('/config.json');
+    if (!response.ok) throw new Error('Failed to load config.json');
+    const config: AppConfig = await response.json();
 
-// Layer Toggle Logic
-const buttons = document.querySelectorAll('.layer-btn');
-buttons.forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    const target = e.currentTarget as HTMLButtonElement;
-    const layerName = target.getAttribute('data-layer') as keyof typeof layers;
-    
-    // Remove all layers first
-    Object.values(layers).forEach(layer => map.removeLayer(layer));
-    
-    // Add selected layer
-    if (layers[layerName]) {
-      layers[layerName].addTo(map);
+    // 1. Initialize Map
+    const map = L.map('map', {
+      center: config.mapOptions.center,
+      zoom: config.mapOptions.zoom,
+      layers: [] // Will add default layers later
+    });
+
+    // 2. Map Layer Factory & Initialization
+    const layers: Record<string, L.Layer> = {};
+    const layerContainer = document.getElementById('layer-options');
+
+    // Extract icons from the module (filter out non-icon exports)
+    const iconsObject: Record<string, any> = {};
+    for (const [key, value] of Object.entries(LucideIcons)) {
+      if (typeof value === 'object' && Array.isArray(value)) {
+        iconsObject[key] = value;
+      }
     }
-    
-    // Update UI
-    buttons.forEach(b => b.classList.remove('active'));
-    target.classList.add('active');
-  });
-});
+
+    config.layers.forEach((layerSpec) => {
+      // Create Leaflet layer
+      let leafletLayer: L.Layer;
+      if (layerSpec.type === 'wms') {
+        leafletLayer = L.tileLayer.wms(layerSpec.url, layerSpec.options);
+      } else {
+        leafletLayer = L.tileLayer(layerSpec.url, layerSpec.options);
+      }
+      layers[layerSpec.id] = leafletLayer;
+
+      // Add to map if specified as active
+      if (layerSpec.active) {
+        leafletLayer.addTo(map);
+      }
+
+      // 3. Create UI Button
+      if (layerContainer) {
+        const btn = document.createElement('button');
+        btn.className = `layer-btn ${layerSpec.active ? 'active' : ''}`;
+        btn.setAttribute('data-layer', layerSpec.id);
+        btn.setAttribute('aria-label', `${layerSpec.label} Layer`);
+
+        // Handle Lucide Icon
+        // We use the JSON-specified icon or fallback to 'Map'
+        const iconName = layerSpec.icon as string;
+        
+        btn.innerHTML = `
+          <i data-lucide="${iconName}"></i>
+          <span>${layerSpec.label}</span>
+        `;
+        
+        layerContainer.appendChild(btn);
+
+        // 4. Attach Listener
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          
+          // Clear and set layer
+          Object.values(layers).forEach(l => map.removeLayer(l));
+          leafletLayer.addTo(map);
+
+          // Update UI
+          document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      }
+    });
+
+    // Refresh all icons found in the DOM based on data-lucide attribute
+    LucideIcons.createIcons({
+      icons: iconsObject
+    });
+
+  } catch (error) {
+    console.error('Error initializing map application:', error);
+    document.body.innerHTML += `<div class="glass-panel" style="top:50%; left:50%; transform:translate(-50%,-50%); width: auto;">
+      <h2>ERROR</h2>
+      <p>${error}</p>
+    </div>`;
+  }
+}
+
+initMap();

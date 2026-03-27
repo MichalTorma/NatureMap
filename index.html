@@ -12,23 +12,8 @@
       <h2>MAP STYLING</h2>
       <p class="subtitle">Select your base layer</p>
       
-      <div class="layer-options">
-        <button class="layer-btn active" data-layer="osm" aria-label="Standard Map">
-          <i data-lucide="map"></i>
-          <span>Standard</span>
-        </button>
-        <button class="layer-btn" data-layer="dark" aria-label="Dark Mode Map">
-          <i data-lucide="moon"></i>
-          <span>Dark</span>
-        </button>
-        <button class="layer-btn" data-layer="topo" aria-label="Topographic Map">
-          <i data-lucide="mountain"></i>
-          <span>Topography</span>
-        </button>
-        <button class="layer-btn" data-layer="satellite" aria-label="Satellite Map">
-          <i data-lucide="satellite"></i>
-          <span>Satellite</span>
-        </button>
+      <div id="layer-options" class="layer-options">
+        <!-- Buttons will be injected here dynamically from config.json -->
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
