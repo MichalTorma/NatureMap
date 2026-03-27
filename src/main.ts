@@ -143,7 +143,10 @@ async function initMap() {
     // 4. GBIF Overlay Logic
     let gbifLayer: L.TileLayer | null = null;
     let currentTaxonKey = config.gbif.defaultTaxon;
-    let currentStyleId = config.gbif.defaultStyle;
+    let currentShape = 'hex';
+    let currentPalette = 'classic';
+    let currentDensity = 45;
+    let currentOpacity = 0.8;
     let currentYear = 2025;
     let currentOrigins: string[] = ['HUMAN_OBSERVATION', 'ALL']; 
     let isPlaying = false;
@@ -161,18 +164,20 @@ async function initMap() {
 
     const gbifSearch = document.getElementById('gbif-search') as HTMLInputElement;
     const gbifResults = document.getElementById('gbif-results') as HTMLElement;
-    const gbifStyleSelect = document.getElementById('gbif-style') as HTMLSelectElement;
     const gbifYearInput = document.getElementById('gbif-year') as HTMLInputElement;
     const yearValueDisplay = document.getElementById('year-value') as HTMLElement;
     const playBtn = document.getElementById('gbif-play');
     const originBtns = document.querySelectorAll('#gbif-origin .toggle-btn');
 
-    config.gbif.availableStyles.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.id; opt.textContent = s.label;
-      gbifStyleSelect.appendChild(opt);
-    });
-    gbifStyleSelect.value = currentStyleId;
+    // Styling Engine UI Elements
+    const shapeBtns = document.querySelectorAll('#gbif-shape-picker .picker-btn');
+    const paletteBtns = document.querySelectorAll('#gbif-palette-picker .palette-btn');
+    const densityInput = document.getElementById('gbif-density') as HTMLInputElement;
+    const opacityInput = document.getElementById('gbif-opacity') as HTMLInputElement;
+    const advancedToggle = document.getElementById('advanced-toggle');
+    const advancedDrawer = document.getElementById('advanced-drawer');
+    const densityValueTag = document.getElementById('density-value');
+    const opacityValueTag = document.getElementById('opacity-value');
 
     const checkGbifHealth = async () => {
       const dot = gbifHeader?.querySelector('.status-dot');
@@ -194,8 +199,18 @@ async function initMap() {
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
       
-      const styleConfig = config.gbif.availableStyles.find(s => s.id === currentStyleId);
-      const styleParams = styleConfig?.params || 'style=classic.poly';
+      // Use 'adhoc' mapping endpoint instead of 'density' to support Year and BasisOfRecord filtering
+      // This resolves the 'Guru Meditation' 404/Varnish routing issues
+      let layerType = 'poly';
+      if (currentShape === 'point') layerType = 'point';
+      if (currentShape === 'heatmap') layerType = 'heatmap';
+      
+      const styleParam = `${currentPalette}.${layerType}`;
+      
+      // Determine binning parameters
+      let binParam = '';
+      if (currentShape === 'hex') binParam = `&bin=hex&hexPerTile=${currentDensity}`;
+      if (currentShape === 'square') binParam = `&bin=square&squareSize=${currentDensity === 45 ? 128 : (currentDensity > 50 ? 64 : 256)}`;
       
       const yearRange = `1900,${currentYear}`;
       
@@ -204,13 +219,14 @@ async function initMap() {
         originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
       }
       
-      // Use v2 with srs=EPSG:3857 and @1x spec for most robust Varnish routing
-      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?srs=EPSG:3857&${styleParams}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
+      // Switch to 'adhoc' + @1x globally for stable Varnish routing 
+      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
+      
       gbifLayer = L.tileLayer(url, { 
-        opacity: 0.8,
+        opacity: currentOpacity,
         attribution: '&copy; GBIF',
-        crossOrigin: 'anonymous', // Enable CORS to avoid ORB blocks on errors (404s)
-        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' // Silent handling for expected 404s
+        crossOrigin: 'anonymous',
+        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
       }).addTo(map);
     };
     
@@ -252,9 +268,45 @@ async function initMap() {
       searchTimeout = setTimeout(() => fetchGbif(query), 600); // 600ms debounce
     });
 
-    gbifStyleSelect.addEventListener('change', () => { 
-      currentStyleId = gbifStyleSelect.value; 
-      debouncedUpdateGbifLayer(100); 
+    shapeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        shapeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentShape = btn.getAttribute('data-shape') || 'hex';
+        debouncedUpdateGbifLayer(100);
+      });
+    });
+
+    paletteBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        paletteBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPalette = btn.getAttribute('data-palette') || 'classic';
+        debouncedUpdateGbifLayer(100);
+      });
+    });
+
+    advancedToggle?.addEventListener('click', () => {
+      if (advancedDrawer) {
+        advancedDrawer.style.display = advancedDrawer.style.display === 'none' ? 'flex' : 'none';
+        const icon = advancedToggle.querySelector('i');
+        if (icon) icon.setAttribute('data-lucide', advancedDrawer.style.display === 'none' ? 'settings-2' : 'x');
+        LucideIcons.createIcons({ icons: iconsObject });
+      }
+    });
+
+    densityInput.addEventListener('input', () => {
+      currentDensity = parseInt(densityInput.value);
+      if (densityValueTag) {
+        densityValueTag.textContent = currentDensity > 60 ? 'High' : (currentDensity < 30 ? 'Low' : 'Med');
+      }
+      debouncedUpdateGbifLayer(400);
+    });
+
+    opacityInput.addEventListener('input', () => {
+      currentOpacity = parseFloat(opacityInput.value);
+      if (opacityValueTag) opacityValueTag.textContent = `${Math.round(currentOpacity * 100)}%`;
+      if (gbifLayer) gbifLayer.setOpacity(currentOpacity);
     });
     
     // Split input (visual) from change (network update) to reduce API pressure

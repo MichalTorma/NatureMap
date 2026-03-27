@@ -348,12 +348,110 @@ body {
   font-size: 0.65rem !important;
 }
 
-.pulse-marker {
-  width: 14px; height: 14px;
+
+/* Advanced Styling Engine */
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.picker-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.picker-btn i { width: 18px; height: 18px; opacity: 0.7; }
+
+.picker-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.picker-btn.active {
   background: var(--accent-color);
-  border: 2px solid #fff;
+  border-color: #fff;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+}
+.picker-btn.active i { opacity: 1; }
+
+.palette-picker {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 4px 0;
+}
+
+.palette-btn {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  animation: pulse-ring 2s infinite;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, var(--color-main), var(--color-sec));
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.palette-btn:hover { transform: scale(1.2); border-color: rgba(255, 255, 255, 0.5); }
+.palette-btn.active {
+  border-color: #fff;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px var(--color-main);
+}
+
+.advanced-section {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}
+
+.advanced-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.advanced-header:hover { opacity: 1; }
+.advanced-header i { width: 14px; height: 14px; }
+
+.advanced-drawer {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.val-tag {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
 }
 
 @keyframes pulse-ring {
