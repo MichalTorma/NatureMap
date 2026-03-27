@@ -89,7 +89,7 @@ async function initMap() {
     let currentPalette = 'classic';
     let currentDensity = 45;
     let currentOpacity = 0.8;
-    let currentYear = 2025;
+    let currentYear: number | 'ALL' = 'ALL';
     let currentOrigins: string[] = ['HUMAN_OBSERVATION', 'ALL']; 
     let isPlaying = false;
     let playInterval: any;
@@ -231,11 +231,11 @@ async function initMap() {
       if (gbifLayer) map.removeLayer(gbifLayer);
       const styleParam = resolveGbifStyle(currentPalette, currentShape);
       const binParam = getBinParam(currentShape, currentDensity);
-      const yearRange = `1900,${currentYear}`;
+      const yearParam = currentYear === 'ALL' ? '' : `&year=1900,${currentYear}`;
       let originParam = '';
       if (!currentOrigins.includes('ALL')) originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
       const taxonParam = currentTaxonKey ? `&taxonKey=${currentTaxonKey}` : '';
-      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}${taxonParam}&year=${yearRange}${originParam}`;
+      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}${taxonParam}${yearParam}${originParam}`;
       gbifLayer = L.tileLayer(url, { 
         opacity: currentOpacity, 
         attribution: '&copy; GBIF', 
@@ -322,8 +322,9 @@ async function initMap() {
     });
 
     gbifYearInput.addEventListener('input', () => {
-      currentYear = parseInt(gbifYearInput.value);
-      yearValueDisplay.textContent = currentYear.toString();
+      const val = parseInt(gbifYearInput.value);
+      currentYear = val >= 2025 ? 'ALL' : val;
+      yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
     });
     gbifYearInput.addEventListener('change', () => debouncedUpdateGbifLayer(200));
 
@@ -331,16 +332,24 @@ async function initMap() {
       playBtn.addEventListener('click', () => {
         isPlaying = !isPlaying;
         playBtn.classList.toggle('playing', isPlaying);
+        const icon = playBtn.querySelector('i');
+        if (icon) icon.setAttribute('data-lucide', isPlaying ? 'square' : 'play');
+        LucideIcons.createIcons({ icons: iconsObject });
+        
         if (isPlaying) {
-          if (currentYear >= 2025) currentYear = 1900;
+          if (currentYear === 'ALL' || currentYear >= 2025) currentYear = 1900;
           playInterval = setInterval(() => {
-            currentYear += 2;
-            if (currentYear > 2025) {
-              currentYear = 2025; isPlaying = false; clearInterval(playInterval);
+            if (currentYear !== 'ALL') currentYear += 2;
+            if (currentYear !== 'ALL' && currentYear > 2025) {
+              currentYear = 'ALL'; 
+              isPlaying = false; 
+              clearInterval(playInterval);
               playBtn.classList.remove('playing');
+              if (icon) icon.setAttribute('data-lucide', 'play');
+              LucideIcons.createIcons({ icons: iconsObject });
             }
-            gbifYearInput.value = currentYear.toString();
-            yearValueDisplay.textContent = currentYear.toString();
+            gbifYearInput.value = currentYear === 'ALL' ? "2025" : currentYear.toString();
+            yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
             updateGbifLayer();
           }, 1200);
         } else clearInterval(playInterval);
