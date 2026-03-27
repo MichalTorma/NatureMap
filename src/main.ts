@@ -120,6 +120,37 @@ async function initMap() {
     const styleTester = document.getElementById('style-tester') as HTMLCanvasElement;
     const paletteStatusTag = document.getElementById('palette-status');
 
+    const resolveGbifStyle = (palette: string, shape: string): string => {
+      // 100% Strictly Typed GBIF Map Style Resolutions.
+      // We must NEVER mix .point styles on .poly grids, as it destroys scientific mapping data (renders dots inside hex bins).
+      const isBinned = shape === 'hex' || shape === 'square';
+      const isHeatmap = shape === 'heatmap';
+      
+      switch(palette) {
+        case 'classic':
+          return isBinned ? 'classic.poly' : 'classic.point';
+        case 'green':
+          return isBinned ? 'green.poly' : (isHeatmap ? 'greenHeat.point' : 'green.point');
+        case 'blue':
+          // Ocean Palette -> 'classic-noborder' uses a deep blue/cyan scaling for polygons.
+          return isBinned ? 'classic-noborder.poly' : 'blueHeat.point'; 
+        case 'orange':
+          // Fire Palette -> 'red' is the official corresponding native GBIF polygon ramp for heat.
+          return isBinned ? 'red.poly' : (isHeatmap ? 'orangeHeat.point' : 'fire.point');
+        case 'purpleHeat':
+          // Royal Palette -> 'purpleYellow' is the officially supported high-visibility binning ramp.
+          return isBinned ? 'purpleYellow.poly' : 'purpleHeat.point';
+        default:
+          return 'classic.point';
+      }
+    };
+
+    const getBinParam = (shape: string, density: number): string => {
+      if (shape === 'hex') return `&bin=hex&hexPerTile=${density}`;
+      if (shape === 'square') return `&bin=square&squareSize=${density === 45 ? 128 : (density > 50 ? 64 : 256)}`;
+      return '';
+    };
+
     // History Logic
     interface TaxonHistory { key: number | null; name: string; }
     let currentHistory: TaxonHistory[] = JSON.parse(localStorage.getItem('gbif_history') || '[]');
@@ -162,9 +193,9 @@ async function initMap() {
 
     // Style Validation Logic
     const checkStyleCapability = async (shape: string, palette: string): Promise<boolean> => {
-      let layerType = shape === 'point' ? 'point' : (shape === 'heatmap' ? 'heatmap' : 'poly');
-      let binExtra = shape === 'hex' ? '&bin=hex&hexPerTile=30' : (shape === 'square' ? '&bin=square&squareSize=256' : '');
-      const testUrl = `https://api.gbif.org/v2/map/occurrence/adhoc/0/0/0@1x.png?srs=EPSG:3857&style=${palette}.${layerType}${binExtra}&taxonKey=1`;
+      const styleParam = resolveGbifStyle(palette, shape);
+      const binParam = getBinParam(shape, 30); // Test at base resolution
+      const testUrl = `https://api.gbif.org/v2/map/occurrence/adhoc/0/0/0@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}&taxonKey=1`;
       try {
         const res = await fetch(testUrl, { mode: 'cors' });
         if (!res.ok) return false;
@@ -175,7 +206,9 @@ async function initMap() {
         ctx.clearRect(0, 0, 256, 256);
         ctx.drawImage(img, 0, 0, 256, 256);
         const data = ctx.getImageData(0, 0, 256, 256).data;
-        for (let i = 3; i < data.length; i += 4) { if (data[i] > 0) return true; }
+        // Verify multiple non-transparent pixels to ensure capability vs noise
+        let pixels = 0;
+        for (let i = 3; i < data.length; i += 4) { if (data[i] > 10) pixels++; if (pixels > 1) return true; }
         return false;
       } catch (e) { return false; }
     };
@@ -196,17 +229,19 @@ async function initMap() {
 
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
-      let layerType = currentShape === 'point' ? 'point' : (currentShape === 'heatmap' ? 'heatmap' : 'poly');
-      const styleParam = `${currentPalette}.${layerType}`;
-      let binParam = '';
-      if (currentShape === 'hex') binParam = `&bin=hex&hexPerTile=${currentDensity}`;
-      if (currentShape === 'square') binParam = `&bin=square&squareSize=${currentDensity === 45 ? 128 : (currentDensity > 50 ? 64 : 256)}`;
+      const styleParam = resolveGbifStyle(currentPalette, currentShape);
+      const binParam = getBinParam(currentShape, currentDensity);
       const yearRange = `1900,${currentYear}`;
       let originParam = '';
       if (!currentOrigins.includes('ALL')) originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
       const taxonParam = currentTaxonKey ? `&taxonKey=${currentTaxonKey}` : '';
       const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}${taxonParam}&year=${yearRange}${originParam}`;
-      gbifLayer = L.tileLayer(url, { opacity: currentOpacity, attribution: '&copy; GBIF', crossOrigin: 'anonymous' }).addTo(map);
+      gbifLayer = L.tileLayer(url, { 
+        opacity: currentOpacity, 
+        attribution: '&copy; GBIF', 
+        crossOrigin: 'anonymous',
+        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      }).addTo(map);
     };
 
     let updateTimeout: any;
@@ -320,12 +355,55 @@ async function initMap() {
           originBtns.forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         } else {
-          document.querySelector('[data-value="ALL"]')?.classList.remove('active');
+          const allBtn = document.querySelector('[data-value="ALL"]');
+          allBtn?.classList.remove('active');
           if (currentOrigins.includes('ALL')) currentOrigins = [];
-          if (currentOrigins.includes(value)) { currentOrigins = currentOrigins.filter(v => v !== value); btn.classList.remove('active'); }
-          else { currentOrigins.push(value); btn.classList.add('active'); }
+          if (currentOrigins.includes(value)) { 
+            currentOrigins = currentOrigins.filter(v => v !== value); 
+            btn.classList.remove('active'); 
+          } else { 
+            currentOrigins.push(value); 
+            btn.classList.add('active'); 
+          }
+          if (currentOrigins.length === 0) {
+             currentOrigins = ['ALL'];
+             allBtn?.classList.add('active');
+          }
         }
         debouncedUpdateGbifLayer(400);
+      });
+    });
+
+    const locateBtn = document.getElementById('locate-btn');
+    let userMarker: L.Marker | null = null;
+    if (locateBtn) {
+      locateBtn.addEventListener('click', () => {
+        locateBtn.classList.add('loading');
+        map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
+      });
+    }
+    if (!savedCenter) map.locate({ setView: true, maxZoom: 13 });
+    map.on('locationfound', (e) => {
+      if (locateBtn) locateBtn.classList.remove('loading');
+      const pulseIcon = L.divIcon({ className: 'user-location-marker', html: '<div class="pulse-marker"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+      if (userMarker) userMarker.setLatLng(e.latlng);
+      else userMarker = L.marker(e.latlng, { icon: pulseIcon }).addTo(map);
+    });
+
+    // 5. UI Interactivity (Mobile Toggles & Collapsibles)
+    const uiPanel = document.getElementById('ui-panel');
+    const panelHeader = uiPanel?.querySelector('.panel-header');
+    if (panelHeader) {
+      panelHeader.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          uiPanel?.classList.toggle('collapsed');
+        }
+      });
+    }
+    const collapsibles = document.querySelectorAll('.collapsible');
+    collapsibles.forEach(section => {
+      section.querySelector('.section-header')?.addEventListener('click', () => {
+        section.classList.toggle('active');
       });
     });
 
@@ -338,6 +416,7 @@ async function initMap() {
       } catch (e) { dot?.classList.add('offline'); }
     };
     
+    // 6. Final Initialization
     renderHistory();
     checkGbifHealth();
     validateAllPalettes(currentShape);
