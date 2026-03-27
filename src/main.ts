@@ -25,6 +25,13 @@ interface AppConfig {
   };
 }
 
+const iconsObject: Record<string, any> = {};
+for (const [key, value] of Object.entries(LucideIcons)) {
+  if (typeof value === 'object' && Array.isArray(value)) {
+    iconsObject[key] = value;
+  }
+}
+
 async function initMap() {
   try {
     const response = await fetch('/config.json');
@@ -34,21 +41,13 @@ async function initMap() {
     // 1. Storage Helpers
     const STORAGE_KEY_CENTER = 'mymap_center';
     const STORAGE_KEY_ZOOM = 'mymap_zoom';
-    
     const savedCenter = localStorage.getItem(STORAGE_KEY_CENTER);
     const savedZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
-    
     const initialCenter: [number, number] = savedCenter ? JSON.parse(savedCenter) : config.mapOptions.center;
     const initialZoom = savedZoom ? parseInt(savedZoom) : config.mapOptions.zoom;
 
     // 2. Initialize Map
-    const map = L.map('map', {
-      center: initialCenter,
-      zoom: initialZoom,
-      layers: [] 
-    });
-
-    // Save State on Change
+    const map = L.map('map', { center: initialCenter, zoom: initialZoom, layers: [] });
     const saveState = () => {
       const center = map.getCenter();
       localStorage.setItem(STORAGE_KEY_CENTER, JSON.stringify([center.lat, center.lng]));
@@ -57,67 +56,16 @@ async function initMap() {
     map.on('moveend', saveState);
     map.on('zoomend', saveState);
 
-    // 3. Health & Layer Management
+    // 3. Layer Management
     const baseLayers: Record<string, L.Layer> = {};
     const layerContainer = document.getElementById('layer-options');
 
-    // Extract icons
-    const iconsObject: Record<string, any> = {};
-    for (const [key, value] of Object.entries(LucideIcons)) {
-      if (typeof value === 'object' && Array.isArray(value)) {
-        iconsObject[key] = value;
-      }
-    }
-
-    const checkLayerHealth = async (layerSpec: LayerConfig, btn: HTMLElement) => {
-      const dot = btn.querySelector('.status-dot');
-      try {
-        let testUrl = layerSpec.url
-          .replace('{s}', 'a')
-          .replace('{r}', '')
-          .replace('{z}', '10')
-          .replace('{x}', '511')
-          .replace('{y}', '340');
-          
-        if (layerSpec.type === 'wms') {
-           testUrl = layerSpec.url.split('?')[0] + '?SERVICE=WMS&REQUEST=GetCapabilities';
-        }
-        
-        // Use 'cors' mode to get real status codes and avoid ORB noise
-        const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
-        if (res.ok) {
-          dot?.classList.add('online');
-        } else {
-          throw new Error('Offline');
-        }
-      } catch (e) {
-        dot?.classList.add('offline');
-        btn.classList.add('offline');
-      }
-    };
-
     config.layers.forEach((layerSpec) => {
-      const layerOptions = { 
-        ...layerSpec.options, 
-        errorTileUrl: '/error-tile.png',
-        crossOrigin: 'anonymous' // Enable CORS to avoid ORB blocks on errors
-      };
-
       const leafletLayer = layerSpec.type === 'wms' 
-        ? L.tileLayer.wms(layerSpec.url, layerOptions)
-        : L.tileLayer(layerSpec.url, layerOptions);
-      
+        ? L.tileLayer.wms(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous' })
+        : L.tileLayer(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous' });
       baseLayers[layerSpec.id] = leafletLayer;
       if (layerSpec.active) leafletLayer.addTo(map);
-
-      // Handle Live Errors
-      leafletLayer.on('tileerror', () => {
-        const btn = document.querySelector(`[data-layer="${layerSpec.id}"]`);
-        const dot = btn?.querySelector('.status-dot');
-        dot?.classList.remove('online');
-        dot?.classList.add('offline');
-        btn?.classList.add('offline');
-      });
 
       if (layerContainer) {
         const btn = document.createElement('button');
@@ -125,24 +73,18 @@ async function initMap() {
         btn.setAttribute('data-layer', layerSpec.id);
         btn.innerHTML = `<div class="status-dot"></div><i data-lucide="${layerSpec.icon}"></i><span>${layerSpec.label}</span>`;
         layerContainer.appendChild(btn);
-
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          if (btn.classList.contains('offline')) return;
+        btn.addEventListener('click', () => {
           Object.values(baseLayers).forEach(l => map.removeLayer(l));
           leafletLayer.addTo(map);
           document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         });
-
-        // Run Pre-flight Health Check
-        checkLayerHealth(layerSpec, btn);
       }
     });
 
-    // 4. GBIF Overlay Logic
+    // 4. GBIF Biodiversity Core Logic
     let gbifLayer: L.TileLayer | null = null;
-    let currentTaxonKey = config.gbif.defaultTaxon;
+    let currentTaxonKey: number | null = null;
     let currentShape = 'hex';
     let currentPalette = 'classic';
     let currentDensity = 45;
@@ -154,8 +96,6 @@ async function initMap() {
 
     const gbifSection = document.getElementById('gbif-section');
     const gbifHeader = gbifSection?.querySelector('.section-header');
-    
-    // Add health status dot to GBIF section
     if (gbifHeader) {
       const dot = document.createElement('div');
       dot.className = 'status-dot';
@@ -168,8 +108,6 @@ async function initMap() {
     const yearValueDisplay = document.getElementById('year-value') as HTMLElement;
     const playBtn = document.getElementById('gbif-play');
     const originBtns = document.querySelectorAll('#gbif-origin .toggle-btn');
-
-    // Styling Engine UI Elements
     const shapeBtns = document.querySelectorAll('#gbif-shape-picker .picker-btn');
     const paletteBtns = document.querySelectorAll('#gbif-palette-picker .palette-btn');
     const densityInput = document.getElementById('gbif-density') as HTMLInputElement;
@@ -178,67 +116,104 @@ async function initMap() {
     const advancedDrawer = document.getElementById('advanced-drawer');
     const densityValueTag = document.getElementById('density-value');
     const opacityValueTag = document.getElementById('opacity-value');
+    const historyShelf = document.getElementById('gbif-history');
+    const styleTester = document.getElementById('style-tester') as HTMLCanvasElement;
+    const paletteStatusTag = document.getElementById('palette-status');
 
-    const checkGbifHealth = async () => {
-      const dot = gbifHeader?.querySelector('.status-dot');
-      try {
-        // Use a stable V1 API endpoint for the heartbeat to ensure a clean console and accurate status
-        const testUrl = `https://api.gbif.org/v1/species/2435099`;
-        const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
-        if (res.ok) {
-          dot?.classList.add('online');
-        } else {
-          throw new Error('Offline');
-        }
-      } catch (e) {
-        dot?.classList.add('offline');
-      }
+    // History Logic
+    interface TaxonHistory { key: number | null; name: string; }
+    let currentHistory: TaxonHistory[] = JSON.parse(localStorage.getItem('gbif_history') || '[]');
+
+    const renderHistory = () => {
+      if (!historyShelf) return;
+      historyShelf.innerHTML = '';
+      const globalChip = document.createElement('div');
+      globalChip.className = `history-chip global ${currentTaxonKey === null ? 'active' : ''}`;
+      globalChip.textContent = 'Global Biodiversity';
+      globalChip.addEventListener('click', () => {
+        currentTaxonKey = null;
+        gbifSearch.value = '';
+        renderHistory();
+        debouncedUpdateGbifLayer(10);
+      });
+      historyShelf.appendChild(globalChip);
+
+      currentHistory.forEach(h => {
+        const chip = document.createElement('div');
+        chip.className = `history-chip ${currentTaxonKey === h.key ? 'active' : ''}`;
+        chip.textContent = h.name;
+        chip.addEventListener('click', () => {
+          currentTaxonKey = h.key;
+          gbifSearch.value = h.name;
+          renderHistory();
+          debouncedUpdateGbifLayer(10);
+        });
+        historyShelf.appendChild(chip);
+      });
     };
-    checkGbifHealth();
+
+    const saveToHistory = (taxon: TaxonHistory) => {
+      currentHistory = currentHistory.filter(h => h.key !== taxon.key);
+      currentHistory.unshift(taxon);
+      currentHistory = currentHistory.slice(0, 8);
+      localStorage.setItem('gbif_history', JSON.stringify(currentHistory));
+      renderHistory();
+    };
+
+    // Style Validation Logic
+    const checkStyleCapability = async (shape: string, palette: string): Promise<boolean> => {
+      let layerType = shape === 'point' ? 'point' : (shape === 'heatmap' ? 'heatmap' : 'poly');
+      let binExtra = shape === 'hex' ? '&bin=hex&hexPerTile=30' : (shape === 'square' ? '&bin=square&squareSize=256' : '');
+      const testUrl = `https://api.gbif.org/v2/map/occurrence/adhoc/0/0/0@1x.png?srs=EPSG:3857&style=${palette}.${layerType}${binExtra}&taxonKey=1`;
+      try {
+        const res = await fetch(testUrl, { mode: 'cors' });
+        if (!res.ok) return false;
+        const blob = await res.blob();
+        const img = await createImageBitmap(blob);
+        const ctx = styleTester.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return false;
+        ctx.clearRect(0, 0, 256, 256);
+        ctx.drawImage(img, 0, 0, 256, 256);
+        const data = ctx.getImageData(0, 0, 256, 256).data;
+        for (let i = 3; i < data.length; i += 4) { if (data[i] > 0) return true; }
+        return false;
+      } catch (e) { return false; }
+    };
+
+    const validateAllPalettes = async (shape: string) => {
+      if (paletteStatusTag) { paletteStatusTag.textContent = 'Verifying...'; paletteStatusTag.className = 'val-tag status-tag testing'; }
+      const tests = Array.from(paletteBtns).map(async (btn) => {
+        const palette = btn.getAttribute('data-palette') || 'classic';
+        btn.classList.add('testing');
+        btn.classList.remove('verified', 'unsupported');
+        const isValid = await checkStyleCapability(shape, palette);
+        btn.classList.remove('testing');
+        if (isValid) btn.classList.add('verified'); else btn.classList.add('unsupported');
+      });
+      await Promise.all(tests);
+      if (paletteStatusTag) { paletteStatusTag.textContent = 'Verified'; paletteStatusTag.className = 'val-tag status-tag verified'; }
+    };
 
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
-      
-      // Use 'adhoc' mapping endpoint instead of 'density' to support Year and BasisOfRecord filtering
-      // This resolves the 'Guru Meditation' 404/Varnish routing issues
-      let layerType = 'poly';
-      if (currentShape === 'point') layerType = 'point';
-      if (currentShape === 'heatmap') layerType = 'heatmap';
-      
+      let layerType = currentShape === 'point' ? 'point' : (currentShape === 'heatmap' ? 'heatmap' : 'poly');
       const styleParam = `${currentPalette}.${layerType}`;
-      
-      // Determine binning parameters
       let binParam = '';
       if (currentShape === 'hex') binParam = `&bin=hex&hexPerTile=${currentDensity}`;
       if (currentShape === 'square') binParam = `&bin=square&squareSize=${currentDensity === 45 ? 128 : (currentDensity > 50 ? 64 : 256)}`;
-      
       const yearRange = `1900,${currentYear}`;
-      
       let originParam = '';
-      if (!currentOrigins.includes('ALL')) {
-        originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
-      }
-      
-      // Switch to 'adhoc' + @1x globally for stable Varnish routing 
-      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}&taxonKey=${currentTaxonKey}&year=${yearRange}${originParam}`;
-      
-      gbifLayer = L.tileLayer(url, { 
-        opacity: currentOpacity,
-        attribution: '&copy; GBIF',
-        crossOrigin: 'anonymous',
-        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
-      }).addTo(map);
+      if (!currentOrigins.includes('ALL')) originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
+      const taxonParam = currentTaxonKey ? `&taxonKey=${currentTaxonKey}` : '';
+      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${binParam}${taxonParam}&year=${yearRange}${originParam}`;
+      gbifLayer = L.tileLayer(url, { opacity: currentOpacity, attribution: '&copy; GBIF', crossOrigin: 'anonymous' }).addTo(map);
     };
-    
+
     let updateTimeout: any;
     const debouncedUpdateGbifLayer = (delay = 300) => {
       clearTimeout(updateTimeout);
       updateTimeout = setTimeout(() => updateGbifLayer(), delay);
     };
-
-    // Set initial UI state
-    gbifSearch.value = "Puma"; 
-    updateGbifLayer();
 
     const fetchGbif = async (query: string) => {
       const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`);
@@ -251,29 +226,33 @@ async function initMap() {
           li.innerHTML = `<span class="common">${s.vernacularName || s.scientificName}</span><span class="scientific">${s.scientificName}</span>`;
           li.addEventListener('click', () => {
             currentTaxonKey = s.key;
-            gbifSearch.value = s.vernacularName || s.scientificName;
+            const name = s.vernacularName || s.scientificName;
+            gbifSearch.value = name;
             gbifResults.style.display = 'none';
-            debouncedUpdateGbifLayer(10); // Nearly immediate but through common pipe
+            saveToHistory({ key: s.key, name: name });
+            debouncedUpdateGbifLayer(10);
           });
           gbifResults.appendChild(li);
         });
       } else gbifResults.style.display = 'none';
     };
 
-    let searchTimeout: any;
     gbifSearch.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
       const query = gbifSearch.value.trim();
       if (query.length < 3) { gbifResults.style.display = 'none'; return; }
-      searchTimeout = setTimeout(() => fetchGbif(query), 600); // 600ms debounce
+      setTimeout(() => fetchGbif(query), 600);
     });
 
     shapeBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         shapeBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        currentShape = btn.getAttribute('data-shape') || 'hex';
-        debouncedUpdateGbifLayer(100);
+        const newShape = btn.getAttribute('data-shape') || 'hex';
+        if (newShape !== currentShape) {
+          currentShape = newShape;
+          validateAllPalettes(currentShape);
+          debouncedUpdateGbifLayer(100);
+        }
       });
     });
 
@@ -297,9 +276,7 @@ async function initMap() {
 
     densityInput.addEventListener('input', () => {
       currentDensity = parseInt(densityInput.value);
-      if (densityValueTag) {
-        densityValueTag.textContent = currentDensity > 60 ? 'High' : (currentDensity < 30 ? 'Low' : 'Med');
-      }
+      if (densityValueTag) densityValueTag.textContent = currentDensity > 60 ? 'High' : (currentDensity < 30 ? 'Low' : 'Med');
       debouncedUpdateGbifLayer(400);
     });
 
@@ -308,55 +285,36 @@ async function initMap() {
       if (opacityValueTag) opacityValueTag.textContent = `${Math.round(currentOpacity * 100)}%`;
       if (gbifLayer) gbifLayer.setOpacity(currentOpacity);
     });
-    
-    // Split input (visual) from change (network update) to reduce API pressure
+
     gbifYearInput.addEventListener('input', () => {
       currentYear = parseInt(gbifYearInput.value);
       yearValueDisplay.textContent = currentYear.toString();
     });
-    gbifYearInput.addEventListener('change', () => {
-      debouncedUpdateGbifLayer(200);
-    });
+    gbifYearInput.addEventListener('change', () => debouncedUpdateGbifLayer(200));
 
-    // Playback Animation Loop
     if (playBtn) {
       playBtn.addEventListener('click', () => {
         isPlaying = !isPlaying;
         playBtn.classList.toggle('playing', isPlaying);
-        const icon = playBtn.querySelector('i');
-        if (icon) icon.setAttribute('data-lucide', isPlaying ? 'square' : 'play');
-        LucideIcons.createIcons({ icons: iconsObject });
-
         if (isPlaying) {
-          if (currentYear >= 2025) {
-             currentYear = 1900;
-             gbifYearInput.value = "1900";
-          }
+          if (currentYear >= 2025) currentYear = 1900;
           playInterval = setInterval(() => {
-            currentYear += 2; // Step by 2 years for speed
+            currentYear += 2;
             if (currentYear > 2025) {
-              currentYear = 2025;
-              isPlaying = false;
-              clearInterval(playInterval);
+              currentYear = 2025; isPlaying = false; clearInterval(playInterval);
               playBtn.classList.remove('playing');
-              if (icon) icon.setAttribute('data-lucide', 'play');
-              LucideIcons.createIcons({ icons: iconsObject });
             }
             gbifYearInput.value = currentYear.toString();
             yearValueDisplay.textContent = currentYear.toString();
             updateGbifLayer();
-          }, 1200); // 1200ms interval for stable grid generation
-        } else {
-          clearInterval(playInterval);
-        }
+          }, 1200);
+        } else clearInterval(playInterval);
       });
     }
 
-    // Origin Toggles
     originBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const value = btn.getAttribute('data-value') || 'ALL';
-        
         if (value === 'ALL') {
           currentOrigins = ['ALL'];
           originBtns.forEach(b => b.classList.remove('active'));
@@ -364,76 +322,26 @@ async function initMap() {
         } else {
           document.querySelector('[data-value="ALL"]')?.classList.remove('active');
           if (currentOrigins.includes('ALL')) currentOrigins = [];
-          
-          if (currentOrigins.includes(value)) {
-            currentOrigins = currentOrigins.filter(v => v !== value);
-            btn.classList.remove('active');
-          } else {
-            currentOrigins.push(value);
-            btn.classList.add('active');
-          }
-          
-          if (currentOrigins.length === 0) {
-            currentOrigins = ['ALL'];
-            document.querySelector('[data-value="ALL"]')?.classList.add('active');
-          }
+          if (currentOrigins.includes(value)) { currentOrigins = currentOrigins.filter(v => v !== value); btn.classList.remove('active'); }
+          else { currentOrigins.push(value); btn.classList.add('active'); }
         }
-        debouncedUpdateGbifLayer(400); // Debounce origin toggles
+        debouncedUpdateGbifLayer(400);
       });
     });
 
-    // 5. Geolocation Implementation & Smart Startup
-    const locateBtn = document.getElementById('locate-btn');
-    let userMarker: L.Marker | null = null;
-    if (locateBtn) {
-      locateBtn.addEventListener('click', () => {
-        locateBtn.classList.add('loading');
-        map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
-      });
-    }
+    const checkGbifHealth = async () => {
+      const dot = gbifHeader?.querySelector('.status-dot');
+      try {
+        const testUrl = `https://api.gbif.org/v1/species/2435099`;
+        const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
+        if (res.ok) dot?.classList.add('online'); else throw new Error();
+      } catch (e) { dot?.classList.add('offline'); }
+    };
     
-    // Auto-locate on startup if no saved session
-    if (!savedCenter) {
-      map.locate({ setView: true, maxZoom: 13 });
-    }
-
-    map.on('locationfound', (e) => {
-      if (locateBtn) locateBtn.classList.remove('loading');
-      const pulseIcon = L.divIcon({
-        className: 'user-location-marker',
-        html: '<div class="pulse-marker"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-      });
-      if (userMarker) userMarker.setLatLng(e.latlng);
-      else userMarker = L.marker(e.latlng, { icon: pulseIcon }).addTo(map);
-    });
-
-    // 6. Responsive UI Interactivity
-    const uiPanel = document.getElementById('ui-panel');
-    const panelHeader = uiPanel?.querySelector('.panel-header');
-    
-    // Toggle Bottom Sheet on Mobile
-    if (panelHeader) {
-      panelHeader.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-          uiPanel?.classList.toggle('collapsed');
-        }
-      });
-    }
-
-    // Toggle Collapsible Sections
-    const collapsibles = document.querySelectorAll('.collapsible');
-    collapsibles.forEach(section => {
-      const header = section.querySelector('.section-header');
-      header?.addEventListener('click', () => {
-        // Optional: Close others
-        // collapsibles.forEach(s => s.classList.remove('active'));
-        section.classList.toggle('active');
-      });
-    });
-
-    // Final Icons refresh
+    renderHistory();
+    checkGbifHealth();
+    validateAllPalettes(currentShape);
+    updateGbifLayer();
     LucideIcons.createIcons({ icons: iconsObject });
 
   } catch (error) {

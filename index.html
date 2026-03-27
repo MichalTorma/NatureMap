@@ -47,9 +47,10 @@
         </div>
         <div class="section-content">
           <div class="search-container">
-            <input type="text" id="gbif-search" placeholder="Search species (e.g. Puma)..." autocomplete="off">
+            <input type="text" id="gbif-search" placeholder="Search All Biodiversity..." autocomplete="off">
             <ul id="gbif-results" class="search-results"></ul>
           </div>
+          <div id="gbif-history" class="history-shelf"></div>
           
           <div class="filter-controls">
             <div class="control-group">
@@ -71,13 +72,16 @@
             </div>
 
             <div class="control-group">
-              <span class="label">Color Palette</span>
+              <div class="label-row">
+                <span class="label">Color Palette</span>
+                <span id="palette-status" class="val-tag status-tag">Ready</span>
+              </div>
               <div class="palette-picker" id="gbif-palette-picker">
-                <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic"></button>
-                <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest"></button>
-                <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean"></button>
-                <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire"></button>
-                <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal"></button>
+                <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal"><div class="badge"></div></button>
               </div>
             </div>
 
@@ -125,6 +129,7 @@
         </div>
       </div>
     </div>
+    <canvas id="style-tester" width="256" height="256" style="display: none;"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
