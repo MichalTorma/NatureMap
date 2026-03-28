@@ -710,3 +710,81 @@ body {
 .vector-popup .title { font-weight: 700; font-size: 1.1rem; margin-bottom: 4px; color: #fff; }
 .vector-popup .meta { color: #94a3b8; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .vector-popup .meta i { width: 12px; height: 12px; }
+
+/* Dynamic Floating Vector Legend */
+.vector-legend {
+  position: absolute;
+  top: 100px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  transition: opacity 0.3s, transform 0.3s;
+  min-width: 160px;
+}
+
+.vector-legend.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(20px);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.legend-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(-2px);
+}
+
+.legend-item.inactive {
+  opacity: 0.4;
+  filter: grayscale(100%);
+}
+
+.legend-icon-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+.legend-icon-badge i { width: 14px; height: 14px; }
+
+.legend-label { 
+  flex: 1; 
+  text-transform: capitalize; 
+  letter-spacing: 0.3px; 
+}
+
+.legend-count {
+  font-size: 0.75rem;
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 10px;
+  color: rgba(255,255,255,0.7);
+  font-family: monospace;
+}
+

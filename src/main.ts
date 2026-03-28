@@ -540,29 +540,40 @@ async function initMap() {
     const vectorControls = document.getElementById('vector-search-controls');
     const searchAreaBtn = document.getElementById('search-area-btn');
     const clearPointsBtn = document.getElementById('clear-points-btn');
+    const vectorLegend = document.getElementById('vector-legend');
     const vectorLayer = L.layerGroup().addTo(map);
 
-    const getTaxaIcon = (className: string) => {
+    let vectorMarkers: { cssClass: string, label: string, iconUrl: string, marker: L.Marker }[] = [];
+    let activeFilters: Set<string> = new Set();
+
+    const getTaxaInfo = (className: string) => {
       let iconName = 'leaf';
       let cssClass = 'default';
+      let label = 'Unknown';
       const c = className ? className.toLowerCase() : '';
-      if (c === 'aves') { iconName = 'bird'; cssClass = 'aves'; }
-      else if (c === 'mammalia') { iconName = 'paw-print'; cssClass = 'mammalia'; }
-      else if (c === 'plantae' || c === 'magnoliopsida' || c === 'liliopsida') { iconName = 'leaf'; cssClass = 'plantae'; }
-      else if (c === 'insecta') { iconName = 'bug'; cssClass = 'insecta'; }
-      else if (c === 'fungi' || c === 'agaricomycetes') { iconName = 'tree-pine'; cssClass = 'fungi'; }
-      else if (c === 'reptilia') { iconName = 'turtle'; cssClass = 'reptilia'; }
-      else if (c === 'amphibia') { iconName = 'droplet'; cssClass = 'amphibia'; }
-      else if (c === 'actinopterygii') { iconName = 'fish'; cssClass = 'actinopterygii'; }
-      else if (c === 'arachnida') { iconName = 'spider'; cssClass = 'arachnida'; }
+      if (c === 'aves') { iconName = 'bird'; cssClass = 'aves'; label = 'Birds'; }
+      else if (c === 'mammalia') { iconName = 'paw-print'; cssClass = 'mammalia'; label = 'Mammals'; }
+      else if (c === 'plantae' || c === 'magnoliopsida' || c === 'liliopsida') { iconName = 'leaf'; cssClass = 'plantae'; label = 'Plants'; }
+      else if (c === 'insecta') { iconName = 'bug'; cssClass = 'insecta'; label = 'Insects'; }
+      else if (c === 'fungi' || c === 'agaricomycetes') { iconName = 'tree-pine'; cssClass = 'fungi'; label = 'Fungi'; }
+      else if (c === 'reptilia') { iconName = 'turtle'; cssClass = 'reptilia'; label = 'Reptiles'; }
+      else if (c === 'amphibia') { iconName = 'droplet'; cssClass = 'amphibia'; label = 'Amphibians'; }
+      else if (c === 'actinopterygii') { iconName = 'fish'; cssClass = 'actinopterygii'; label = 'Fish'; }
+      else if (c === 'arachnida') { iconName = 'spider'; cssClass = 'arachnida'; label = 'Arachnids'; }
+      else { label = className ? className.charAt(0).toUpperCase() + className.slice(1) : 'Unknown'; }
       
-      return L.divIcon({
-        className: 'custom-taxa-icon',
-        html: `<div class="taxa-marker ${cssClass}"><i data-lucide="${iconName}"></i></div>`,
-        iconSize: [38, 38],
-        iconAnchor: [19, 19],
-        popupAnchor: [0, -19]
-      });
+      return {
+        icon: L.divIcon({
+          className: 'custom-taxa-icon',
+          html: `<div class="taxa-marker ${cssClass}"><i data-lucide="${iconName}"></i></div>`,
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
+          popupAnchor: [0, -19]
+        }),
+        cssClass,
+        label,
+        iconName
+      };
     };
 
     map.on('zoomend', () => {
@@ -592,11 +603,13 @@ async function initMap() {
           const res = await fetch(url);
           const data = await res.json();
           vectorLayer.clearLayers();
+          vectorMarkers = [];
           
           data.results.forEach((occ: any) => {
             if (!occ.decimalLatitude || !occ.decimalLongitude) return;
+            const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum);
             const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
-              icon: getTaxaIcon(occ.class || occ.kingdom || occ.phylum)
+              icon: taxaInfo.icon
             }).addTo(vectorLayer);
             
             const media = occ.media?.[0]?.identifier;
@@ -609,11 +622,51 @@ async function initMap() {
               </div>
             `;
             marker.bindPopup(popupHtml).on('popupopen', () => LucideIcons.createIcons({ icons: iconsObject }));
+            
+            vectorMarkers.push({ cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker: marker });
           });
           
           LucideIcons.createIcons({ icons: iconsObject, root: vectorLayer.getPane() });
           if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
+          
+          // Generate Legend UI dynamically
+          const taxaCounts = vectorMarkers.reduce((acc, m) => {
+             if (!acc[m.cssClass]) acc[m.cssClass] = { count: 0, label: m.label, iconUrl: m.iconUrl };
+             acc[m.cssClass].count++;
+             return acc;
+          }, {} as any);
+
+          if (vectorLegend && Object.keys(taxaCounts).length > 0) {
+            vectorLegend.innerHTML = '';
+            vectorLegend.classList.remove('hidden');
+            activeFilters = new Set(Object.keys(taxaCounts));
+
+            Object.entries(taxaCounts).forEach(([cClass, info]: any) => {
+               const btn = document.createElement('div');
+               btn.className = `legend-item`;
+               btn.innerHTML = `
+                 <div class="legend-icon-badge taxa-marker ${cClass}"><i data-lucide="${info.iconUrl}"></i></div>
+                 <span class="legend-label">${info.label}</span>
+                 <span class="legend-count">${info.count}</span>
+               `;
+               btn.addEventListener('click', () => {
+                 if (activeFilters.has(cClass)) {
+                   activeFilters.delete(cClass);
+                   btn.classList.add('inactive');
+                   vectorMarkers.filter(m => m.cssClass === cClass).forEach(m => vectorLayer.removeLayer(m.marker));
+                 } else {
+                   activeFilters.add(cClass);
+                   btn.classList.remove('inactive');
+                   vectorMarkers.filter(m => m.cssClass === cClass).forEach(m => vectorLayer.addLayer(m.marker));
+                 }
+               });
+               vectorLegend.appendChild(btn);
+            });
+            LucideIcons.createIcons({ icons: iconsObject, root: vectorLegend });
+          }
+
         } catch (e) {
+
           console.error('Vector Search Error:', e);
         } finally {
           if (icon) icon.setAttribute('data-lucide', 'search');
@@ -625,6 +678,9 @@ async function initMap() {
     if (clearPointsBtn) {
       clearPointsBtn.addEventListener('click', () => {
         vectorLayer.clearLayers();
+        vectorMarkers = [];
+        activeFilters.clear();
+        if (vectorLegend) vectorLegend.classList.add('hidden');
         clearPointsBtn.classList.add('hidden');
         if (gbifLayer) map.addLayer(gbifLayer); // Restore heat map
       });
