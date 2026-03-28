@@ -600,34 +600,66 @@ async function initMap() {
         if (!currentOrigins.includes('ALL')) url += `&basisOfRecord=${currentOrigins.join(',')}`;
 
         try {
-          const res = await fetch(url);
-          const data = await res.json();
           vectorLayer.clearLayers();
           vectorMarkers = [];
+          if (vectorLegend) vectorLegend.classList.add('hidden');
           
-          data.results.forEach((occ: any) => {
-            if (!occ.decimalLatitude || !occ.decimalLongitude) return;
-            const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum);
-            const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
-              icon: taxaInfo.icon
-            }).addTo(vectorLayer);
+          let offset = 0;
+          let keepFetching = true;
+          let totalCount = 0;
+          const limit = 300;
+          const MAX_POINTS = 3000;
+          const progressBar = searchAreaBtn.querySelector('.search-progress-bar') as HTMLElement;
+          if (progressBar) progressBar.style.width = '2%';
+          searchAreaBtn.classList.add('loading');
+
+          while (keepFetching) {
+            const pageUrl = `${url}&offset=${offset}`;
+            const res = await fetch(pageUrl);
+            const data = await res.json();
             
-            const media = occ.media?.[0]?.identifier;
-            const imgHtml = media ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy">` : '';
-            const popupHtml = `
-              <div class="vector-popup">
-                ${imgHtml}
-                <div class="title">${occ.scientificName || 'Unknown Species'}</div>
-                <div class="meta"><i data-lucide="calendar"></i> Observed: ${occ.year || 'Unknown'}</div>
-              </div>
-            `;
-            marker.bindPopup(popupHtml).on('popupopen', () => LucideIcons.createIcons({ icons: iconsObject }));
+            if (offset === 0) totalCount = data.count || 0;
             
-            vectorMarkers.push({ cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker: marker });
-          });
+            data.results.forEach((occ: any) => {
+              if (!occ.decimalLatitude || !occ.decimalLongitude) return;
+              const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum);
+              const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
+                icon: taxaInfo.icon
+              }).addTo(vectorLayer);
+              
+              const media = occ.media?.[0]?.identifier;
+              const imgHtml = media ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy">` : '';
+              const popupHtml = `
+                <div class="vector-popup">
+                  ${imgHtml}
+                  <div class="title">${occ.scientificName || 'Unknown Species'}</div>
+                  <div class="meta"><i data-lucide="calendar"></i> Observed: ${occ.year || 'Unknown'}</div>
+                </div>
+              `;
+              marker.bindPopup(popupHtml).on('popupopen', () => LucideIcons.createIcons({ icons: iconsObject }));
+              
+              vectorMarkers.push({ cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker: marker });
+            });
+            
+            offset += limit;
+            
+            if (progressBar && totalCount > 0) {
+              const progress = Math.min(100, Math.round((offset / Math.min(totalCount, MAX_POINTS)) * 100));
+              progressBar.style.width = `${progress}%`;
+            }
+
+            if (data.endOfRecords || offset >= totalCount || vectorMarkers.length >= MAX_POINTS) {
+              keepFetching = false;
+            }
+          }
           
           LucideIcons.createIcons({ icons: iconsObject, root: vectorLayer.getPane() });
           if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
+          
+          if (progressBar) {
+            progressBar.style.width = '100%';
+            setTimeout(() => { progressBar.style.width = '0%'; }, 500);
+          }
           
           // Generate Legend UI dynamically
           const taxaCounts = vectorMarkers.reduce((acc, m) => {
@@ -640,6 +672,13 @@ async function initMap() {
             vectorLegend.innerHTML = '';
             vectorLegend.classList.remove('hidden');
             activeFilters = new Set(Object.keys(taxaCounts));
+            
+            if (totalCount > MAX_POINTS) {
+               const warning = document.createElement('div');
+               warning.className = 'legend-warning';
+               warning.innerHTML = `<i data-lucide="alert-triangle"></i> Showing ${MAX_POINTS.toLocaleString()} of ${totalCount.toLocaleString()} points`;
+               vectorLegend.appendChild(warning);
+            }
 
             Object.entries(taxaCounts).forEach(([cClass, info]: any) => {
                const btn = document.createElement('div');

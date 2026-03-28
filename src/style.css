@@ -652,12 +652,32 @@ body {
   border-radius: 40px;
   font-weight: 600;
   font-size: 0.9rem;
+  font-size: 0.9rem;
   display: flex;
+  position: relative;
+  overflow: hidden;
   align-items: center;
   gap: 10px;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(0,0,0,0.5);
   transition: all 0.2s;
+}
+
+.search-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent-color);
+  width: 0%;
+  transition: width 0.3s ease-out;
+  box-shadow: 0 0 10px var(--accent-color);
+  z-index: 0;
+}
+
+.search-area-btn i, .search-area-btn span {
+  position: relative;
+  z-index: 1;
 }
 
 .search-area-btn:hover { background: var(--accent-color); transform: scale(1.05); }
@@ -787,4 +807,20 @@ body {
   color: rgba(255,255,255,0.7);
   font-family: monospace;
 }
+
+.legend-warning {
+  font-size: 0.7rem;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 6px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  line-height: 1.2;
+}
+.legend-warning i { width: 14px; height: 14px; flex-shrink: 0; }
+
 
