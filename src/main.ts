@@ -536,6 +536,100 @@ async function initMap() {
       });
     }
 
+    // 6. Micro-Vector Area Search
+    const vectorControls = document.getElementById('vector-search-controls');
+    const searchAreaBtn = document.getElementById('search-area-btn');
+    const clearPointsBtn = document.getElementById('clear-points-btn');
+    const vectorLayer = L.layerGroup().addTo(map);
+
+    const getTaxaIcon = (className: string) => {
+      let iconName = 'leaf';
+      let cssClass = 'default';
+      const c = className ? className.toLowerCase() : '';
+      if (c === 'aves') { iconName = 'bird'; cssClass = 'aves'; }
+      else if (c === 'mammalia') { iconName = 'paw-print'; cssClass = 'mammalia'; }
+      else if (c === 'plantae' || c === 'magnoliopsida' || c === 'liliopsida') { iconName = 'leaf'; cssClass = 'plantae'; }
+      else if (c === 'insecta') { iconName = 'bug'; cssClass = 'insecta'; }
+      else if (c === 'fungi' || c === 'agaricomycetes') { iconName = 'tree-pine'; cssClass = 'fungi'; }
+      else if (c === 'reptilia') { iconName = 'turtle'; cssClass = 'reptilia'; }
+      else if (c === 'amphibia') { iconName = 'droplet'; cssClass = 'amphibia'; }
+      else if (c === 'actinopterygii') { iconName = 'fish'; cssClass = 'actinopterygii'; }
+      else if (c === 'arachnida') { iconName = 'spider'; cssClass = 'arachnida'; }
+      
+      return L.divIcon({
+        className: 'custom-taxa-icon',
+        html: `<div class="taxa-marker ${cssClass}"><i data-lucide="${iconName}"></i></div>`,
+        iconSize: [38, 38],
+        iconAnchor: [19, 19],
+        popupAnchor: [0, -19]
+      });
+    };
+
+    map.on('zoomend', () => {
+      if (map.getZoom() >= 12 && vectorControls) {
+        vectorControls.classList.remove('hidden');
+      } else if (vectorControls) {
+        vectorControls.classList.add('hidden');
+      }
+    });
+    if (map.getZoom() >= 12 && vectorControls) vectorControls.classList.remove('hidden');
+
+    if (searchAreaBtn) {
+      searchAreaBtn.addEventListener('click', async () => {
+        const bounds = map.getBounds();
+        const icon = searchAreaBtn.querySelector('i');
+        if (icon) icon.setAttribute('data-lucide', 'loader-2');
+        LucideIcons.createIcons({ icons: iconsObject, root: searchAreaBtn });
+        
+        if (gbifLayer) map.removeLayer(gbifLayer); // Hide raster heat while viewing vectors
+
+        let url = `https://api.gbif.org/v1/occurrence/search?decimalLatitude=${bounds.getSouth()},${bounds.getNorth()}&decimalLongitude=${bounds.getWest()},${bounds.getEast()}&limit=300&occurrenceStatus=PRESENT`;
+        if (currentYear !== 'ALL') url += `&year=1900,${currentYear}`;
+        if (currentTaxonKey) url += `&taxonKey=${currentTaxonKey}`;
+        if (!currentOrigins.includes('ALL')) url += `&basisOfRecord=${currentOrigins.join(',')}`;
+
+        try {
+          const res = await fetch(url);
+          const data = await res.json();
+          vectorLayer.clearLayers();
+          
+          data.results.forEach((occ: any) => {
+            if (!occ.decimalLatitude || !occ.decimalLongitude) return;
+            const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
+              icon: getTaxaIcon(occ.class || occ.kingdom || occ.phylum)
+            }).addTo(vectorLayer);
+            
+            const media = occ.media?.[0]?.identifier;
+            const imgHtml = media ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy">` : '';
+            const popupHtml = `
+              <div class="vector-popup">
+                ${imgHtml}
+                <div class="title">${occ.scientificName || 'Unknown Species'}</div>
+                <div class="meta"><i data-lucide="calendar"></i> Observed: ${occ.year || 'Unknown'}</div>
+              </div>
+            `;
+            marker.bindPopup(popupHtml).on('popupopen', () => LucideIcons.createIcons({ icons: iconsObject }));
+          });
+          
+          LucideIcons.createIcons({ icons: iconsObject, root: vectorLayer.getPane() });
+          if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
+        } catch (e) {
+          console.error('Vector Search Error:', e);
+        } finally {
+          if (icon) icon.setAttribute('data-lucide', 'search');
+          LucideIcons.createIcons({ icons: iconsObject, root: searchAreaBtn });
+        }
+      });
+    }
+
+    if (clearPointsBtn) {
+      clearPointsBtn.addEventListener('click', () => {
+        vectorLayer.clearLayers();
+        clearPointsBtn.classList.add('hidden');
+        if (gbifLayer) map.addLayer(gbifLayer); // Restore heat map
+      });
+    }
+
     // Connect Deep-Link variables to UI Inputs visually
     if (gbifYearInput) gbifYearInput.value = currentYear === 'ALL' ? '2025' : currentYear.toString();
     if (yearValueDisplay) yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;

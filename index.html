@@ -9,6 +9,18 @@
   <body>
     <div id="map"></div>
     
+    <!-- Vector Search Overlay (Appears Zoom >= 12) -->
+    <div id="vector-search-controls" class="vector-controls hidden">
+      <button id="search-area-btn" class="search-area-btn">
+        <i data-lucide="search"></i>
+        <span>Search this area</span>
+      </button>
+      <button id="clear-points-btn" class="clear-points-btn hidden">
+        <i data-lucide="x"></i>
+        <span>Clear Points</span>
+      </button>
+    </div>
+    
     <!-- Floating Location Controls (Always reachable bottom-right) -->
     <div id="location-control" class="location-control floating">
       <button id="share-btn" class="locate-fab" aria-label="Share Map Link" title="Copy mapped view to clipboard">
