@@ -357,62 +357,113 @@ async function initMap() {
       updateTimeout = setTimeout(() => updateGbifLayer(), delay);
     };
 
+    const RANK_ORDER: Record<string, number> = {
+      KINGDOM: 0, PHYLUM: 1, CLASS: 2, ORDER: 3, FAMILY: 4,
+      GENUS: 5, SPECIES: 6, SUBSPECIES: 7, VARIETY: 8, FORM: 9
+    };
+
+    let searchGeneration = 0;
+
     const fetchGbif = async (query: string) => {
+      const gen = ++searchGeneration;
       try {
-        const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`);
+        const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c&limit=8`);
         const suggestions = await res.json();
+        if (gen !== searchGeneration) return;
         gbifResults.innerHTML = '';
-        if (suggestions.length > 0) {
-          gbifResults.style.display = 'block';
-          const top5 = suggestions.slice(0, 5);
-          
-          const richData = await Promise.all(top5.map(async (s: any) => {
-            try {
-              const occRes = await fetch(`https://api.gbif.org/v1/occurrence/search?taxonKey=${s.key}&limit=1&mediaType=StillImage`);
-              const occData = await occRes.json();
-              return { count: occData.count || 0, image: occData.results?.[0]?.media?.[0]?.identifier || '' };
-            } catch { return { count: 0, image: '' }; }
-          }));
+        if (suggestions.length === 0) { gbifResults.style.display = 'none'; return; }
 
-          top5.forEach((s: any, index: number) => {
-            const data = richData[index];
-            const li = document.createElement('li');
-            
-            const avatarHtml = data.image 
-              ? `<img src="${data.image}" class="search-avatar" alt="${s.canonicalName}" loading="lazy">`
-              : `<div class="search-avatar">${getIconSvg('leaf')}</div>`;
-              
-            const rankHtml = s.rank ? `<span class="scientific-rank">${s.rank}</span>` : '';
-            const nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
-            
-            li.innerHTML = `
-              ${avatarHtml}
-              <div class="search-title-row">
-                <span class="common">${nameToUse}</span>
-                ${rankHtml}
-                <span class="scientific">${s.scientificName}</span>
-              </div>
-              <div class="obs-count">
-                ${getIconSvg('globe')}
-                ${data.count.toLocaleString()} worldwide observations
-              </div>
-            `;
-
-            
-            li.addEventListener('click', () => {
-              currentTaxonKey = s.key;
-              gbifSearch.value = nameToUse;
-              gbifResults.style.display = 'none';
-              updateFilterLabel(nameToUse);
-              saveToHistory({ key: s.key, name: nameToUse });
-              debouncedUpdateGbifLayer(10);
-              closeSearchPanel();
-            });
-            gbifResults.appendChild(li);
+        gbifResults.style.display = 'block';
+        const candidates = suggestions.slice(0, 8)
+          .sort((a: any, b: any) => {
+            const aRank = RANK_ORDER[a.rank] ?? 10;
+            const bRank = RANK_ORDER[b.rank] ?? 10;
+            return aRank - bRank;
           });
-        } else {
+
+        const rows: { li: HTMLElement; s: any; countEl: HTMLElement; avatarEl: HTMLElement }[] = [];
+
+        candidates.forEach((s: any) => {
+          const li = document.createElement('li');
+          const rankHtml = s.rank ? `<span class="scientific-rank">${s.rank}</span>` : '';
+          const nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
+
+          li.innerHTML = `
+            <div class="search-avatar">${getIconSvg('leaf')}</div>
+            <div class="search-title-row">
+              <span class="common">${nameToUse}</span>
+              ${rankHtml}
+              <span class="scientific">${s.scientificName}</span>
+            </div>
+            <div class="obs-count">
+              ${getIconSvg('loader-2')}
+              <span class="obs-count-text">...</span>
+            </div>
+          `;
+
+          li.addEventListener('click', () => {
+            currentTaxonKey = s.key;
+            gbifSearch.value = nameToUse;
             gbifResults.style.display = 'none';
+            updateFilterLabel(nameToUse);
+            saveToHistory({ key: s.key, name: nameToUse });
+            debouncedUpdateGbifLayer(10);
+            closeSearchPanel();
+          });
+          gbifResults.appendChild(li);
+
+          rows.push({
+            li,
+            s,
+            countEl: li.querySelector('.obs-count-text') as HTMLElement,
+            avatarEl: li.querySelector('.search-avatar') as HTMLElement
+          });
+        });
+
+        const enriched: { row: typeof rows[0]; count: number }[] = [];
+        for (const row of rows) {
+          if (gen !== searchGeneration) return;
+          try {
+            const occRes = await fetch(`https://api.gbif.org/v1/occurrence/search?taxonKey=${row.s.key}&limit=1`);
+            if (gen !== searchGeneration) return;
+            const occData = await occRes.json();
+            const count = occData.count || 0;
+            const image = occData.results?.[0]?.media?.find((m: any) => m.type === 'StillImage')?.identifier
+                       || occData.results?.[0]?.media?.[0]?.identifier || '';
+            const validImage = image && (image.startsWith('http://') || image.startsWith('https://'));
+
+            if (validImage) {
+              row.avatarEl.outerHTML = `<img src="${image}" class="search-avatar" alt="${row.s.canonicalName}" loading="lazy" onerror="this.outerHTML='<div class=\\'search-avatar\\'>${getIconSvg('leaf')}</div>'">`;
+            }
+            row.countEl.textContent = count > 0 ? `${count.toLocaleString()} observations` : 'No observations';
+            const iconEl = row.li.querySelector('.obs-count svg');
+            if (iconEl) iconEl.outerHTML = getIconSvg('globe');
+            if (count === 0) row.li.classList.add('no-observations');
+            enriched.push({ row, count });
+          } catch {
+            row.countEl.textContent = 'No observations';
+            const iconEl = row.li.querySelector('.obs-count svg');
+            if (iconEl) iconEl.outerHTML = getIconSvg('globe');
+            row.li.classList.add('no-observations');
+            enriched.push({ row, count: 0 });
+          }
         }
+
+        if (gen !== searchGeneration) return;
+        const fragment = document.createDocumentFragment();
+        enriched
+          .sort((a, b) => {
+            const aZero = a.count === 0 ? 1 : 0;
+            const bZero = b.count === 0 ? 1 : 0;
+            if (aZero !== bZero) return aZero - bZero;
+            const aRank = RANK_ORDER[a.row.s.rank] ?? 10;
+            const bRank = RANK_ORDER[b.row.s.rank] ?? 10;
+            if (aRank !== bRank) return aRank - bRank;
+            return b.count - a.count;
+          })
+          .forEach(({ row }) => fragment.appendChild(row.li));
+        gbifResults.innerHTML = '';
+        gbifResults.appendChild(fragment);
       } catch (e) {
         console.error('Suggest API Error', e);
       }

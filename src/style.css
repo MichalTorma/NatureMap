@@ -260,6 +260,11 @@ body {
 
 .search-panel .search-results {
   z-index: 3000;
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+  max-height: min(380px, calc(100vh - 200px));
 }
 
 .search-panel .history-shelf {
@@ -469,6 +474,13 @@ body {
 }
 
 .search-results li:hover { background: rgba(59, 130, 246, 0.2); }
+
+.search-results li.no-observations {
+  opacity: 0.4;
+}
+.search-results li.no-observations .obs-count {
+  color: rgba(255, 255, 255, 0.25);
+}
 
 .search-avatar {
   grid-area: avatar;
