@@ -392,6 +392,7 @@ async function initMap() {
           activeFilters.clear();
           hideLegendFab();
           if (clearPointsBtn) clearPointsBtn.classList.add('hidden');
+          if (searchAreaBtn) searchAreaBtn.classList.remove('hidden');
         }
       });
     }
@@ -560,6 +561,23 @@ async function initMap() {
         if (match) { result.push(match); seen.add(lc); }
       }
       return result;
+    };
+
+    // Dataset Name Resolver
+    const datasetCache = new Map<string, string>();
+    const resolveDatasetName = async (datasetKey: string): Promise<string> => {
+      if (datasetCache.has(datasetKey)) return datasetCache.get(datasetKey)!;
+      try {
+        const res = await fetch(`https://api.gbif.org/v1/dataset/${datasetKey}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const title = data.title || '';
+        datasetCache.set(datasetKey, title);
+        return title;
+      } catch {
+        datasetCache.set(datasetKey, '');
+        return '';
+      }
     };
 
     // Style Validation Logic
@@ -1196,8 +1214,58 @@ async function initMap() {
     });
     legendClose?.addEventListener('click', closeLegend);
 
-    let vectorMarkers: { cssClass: string, label: string, iconUrl: string, marker: L.Marker }[] = [];
+    interface VectorMarkerEntry {
+      cssClass: string;
+      label: string;
+      iconUrl: string;
+      marker: L.Marker;
+      taxonomy: { kingdom: string; phylum: string; class: string; order: string; family: string; genus: string; species: string };
+    }
+    let vectorMarkers: VectorMarkerEntry[] = [];
     let activeFilters: Set<string> = new Set();
+
+    interface TaxaNode {
+      name: string;
+      rank: string;
+      count: number;
+      children: Map<string, TaxaNode>;
+      markers: L.Marker[];
+    }
+
+    const RANKS = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species'] as const;
+
+    const buildTaxaTree = (markers: VectorMarkerEntry[]): TaxaNode => {
+      const root: TaxaNode = { name: 'Life', rank: 'root', count: 0, children: new Map(), markers: [] };
+      for (const m of markers) {
+        let node = root;
+        root.count++;
+        root.markers.push(m.marker);
+        for (const rank of RANKS) {
+          const name = m.taxonomy[rank] || 'Unknown';
+          if (!node.children.has(name)) {
+            node.children.set(name, { name, rank, count: 0, children: new Map(), markers: [] });
+          }
+          const child = node.children.get(name)!;
+          child.count++;
+          child.markers.push(m.marker);
+          node = child;
+        }
+      }
+      return root;
+    };
+
+    const pruneTree = (node: TaxaNode): TaxaNode => {
+      const pruned = new Map<string, TaxaNode>();
+      for (const [key, child] of node.children) {
+        pruned.set(key, pruneTree(child));
+      }
+      node.children = pruned;
+      if (node.children.size === 1 && node.rank !== 'root') {
+        const only = node.children.values().next().value!;
+        if (only.rank !== 'species') return only;
+      }
+      return node;
+    };
 
     const getTaxaInfo = (className: string, hasImage = false) => {
       let iconName = 'leaf';
@@ -1320,6 +1388,7 @@ async function initMap() {
                 MATERIAL_CITATION: 'Material Citation', OBSERVATION: 'Observation', OCCURRENCE: 'Occurrence'
               };
               const basisHtml = occ.basisOfRecord ? `<div class="popup-detail">${getIconSvg('clipboard-list')} ${basisLabels[occ.basisOfRecord] || occ.basisOfRecord}</div>` : '';
+              const datasetKey = occ.datasetKey || '';
 
               const gbifUrl = `https://www.gbif.org/occurrence/${occ.key}`;
               const sourceRef = occ.references || '';
@@ -1334,6 +1403,7 @@ async function initMap() {
                     <div class="popup-detail">${getIconSvg('calendar')} ${dateStr}</div>
                     ${recorderHtml}
                     ${basisHtml}
+                    <div class="popup-detail popup-dataset"></div>
                   </div>
                   <div class="popup-links">
                     <a href="${gbifUrl}" target="_blank" rel="noopener">${getIconSvg('external-link')} GBIF</a>
@@ -1343,9 +1413,11 @@ async function initMap() {
               `;
               marker.bindPopup(popupHtml);
               const popupTaxonKey = occ.speciesKey || occ.taxonKey;
-              if (popupTaxonKey) {
-                marker.on('popupopen', async () => {
-                  const el = marker.getPopup()?.getElement()?.querySelector('.vernacular-popup');
+              marker.on('popupopen', async () => {
+                const popupEl = marker.getPopup()?.getElement();
+                if (!popupEl) return;
+                if (popupTaxonKey) {
+                  const el = popupEl.querySelector('.vernacular-popup');
                   if (el && !el.innerHTML.trim()) {
                     const names = await resolveVernacularNames(popupTaxonKey);
                     if (names.length > 0) {
@@ -1354,10 +1426,28 @@ async function initMap() {
                       ).join(' · ');
                     }
                   }
-                });
-              }
+                }
+                if (datasetKey) {
+                  const dsEl = popupEl.querySelector('.popup-dataset');
+                  if (dsEl && !dsEl.innerHTML.trim()) {
+                    const name = await resolveDatasetName(datasetKey);
+                    if (name) {
+                      dsEl.innerHTML = `${getIconSvg('database')} <a href="https://www.gbif.org/dataset/${datasetKey}" target="_blank" rel="noopener">${name}</a>`;
+                    } else {
+                      dsEl.remove();
+                    }
+                  }
+                }
+              });
               
-              vectorMarkers.push({ cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker: marker });
+              vectorMarkers.push({
+                cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker,
+                taxonomy: {
+                  kingdom: occ.kingdom || '', phylum: occ.phylum || '', class: occ.class || '',
+                  order: occ.order || '', family: occ.family || '', genus: occ.genus || '',
+                  species: occ.species || occ.scientificName || ''
+                }
+              });
             });
             
             offset += limit;
@@ -1373,22 +1463,40 @@ async function initMap() {
           }
           
           if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
+          if (searchAreaBtn) searchAreaBtn.classList.add('hidden');
           
           if (progressBar) {
             progressBar.style.width = '100%';
             setTimeout(() => { progressBar.style.width = '0%'; }, 500);
           }
           
-          const taxaCounts = vectorMarkers.reduce((acc, m) => {
-             if (!acc[m.cssClass]) acc[m.cssClass] = { count: 0, label: m.label, iconUrl: m.iconUrl };
-             acc[m.cssClass].count++;
-             return acc;
-          }, {} as any);
-
-          if (vectorLegendBody && Object.keys(taxaCounts).length > 0) {
+          if (vectorLegendBody && vectorMarkers.length > 0) {
             vectorLegendBody.innerHTML = '';
-            activeFilters = new Set(Object.keys(taxaCounts));
-            
+            const hiddenMarkers = new Set<L.Marker>();
+            const selectedNodes = new Set<string>();
+            const selectedMarkersByNode = new Map<string, Set<L.Marker>>();
+            const markerSet = new Set(vectorMarkers.map(v => v.marker));
+            const markerSpecies = new Map<L.Marker, string>();
+            vectorMarkers.forEach(v => markerSpecies.set(v.marker, v.taxonomy.species || v.label || 'Unknown species'));
+
+            const refreshVisibility = () => {
+              let selectedUnion: Set<L.Marker> | null = null;
+              if (selectedNodes.size > 0) {
+                selectedUnion = new Set<L.Marker>();
+                selectedNodes.forEach(id => {
+                  const nodeMarkers = selectedMarkersByNode.get(id);
+                  if (!nodeMarkers) return;
+                  nodeMarkers.forEach(m => selectedUnion!.add(m));
+                });
+              }
+              markerSet.forEach(marker => {
+                const allowedBySelection = selectedUnion ? selectedUnion.has(marker) : true;
+                const allowedByVisibility = !hiddenMarkers.has(marker);
+                if (allowedBySelection && allowedByVisibility) vectorLayer.addLayer(marker);
+                else vectorLayer.removeLayer(marker);
+              });
+            };
+
             if (totalCount > MAX_POINTS) {
                const warning = document.createElement('div');
                warning.className = 'legend-warning';
@@ -1396,29 +1504,194 @@ async function initMap() {
                vectorLegendBody.appendChild(warning);
             }
 
-            Object.entries(taxaCounts).forEach(([cClass, info]: any) => {
-               const btn = document.createElement('div');
-               btn.className = `legend-item`;
-               btn.innerHTML = `
-                 <div class="legend-icon-badge taxa-marker ${cClass}">${getIconSvg(info.iconUrl)}</div>
-                 <span class="legend-label">${info.label}</span>
-                 <span class="legend-count">${info.count}</span>
-               `;
-               btn.addEventListener('click', () => {
-                 if (activeFilters.has(cClass)) {
-                   activeFilters.delete(cClass);
-                   btn.classList.add('inactive');
-                   vectorMarkers.filter(m => m.cssClass === cClass).forEach(m => vectorLayer.removeLayer(m.marker));
-                 } else {
-                   activeFilters.add(cClass);
-                   btn.classList.remove('inactive');
-                   vectorMarkers.filter(m => m.cssClass === cClass).forEach(m => vectorLayer.addLayer(m.marker));
-                 }
-               });
-               vectorLegendBody.appendChild(btn);
-            });
+            const tree = pruneTree(buildTaxaTree(vectorMarkers));
 
-            showLegendFab(Object.keys(taxaCounts).length);
+            const rankLabel = (r: string) => {
+              const m: Record<string, string> = { root: '', kingdom: 'K', phylum: 'P', class: 'C', order: 'O', family: 'F', genus: 'G', species: 'Sp' };
+              return m[r] || r;
+            };
+
+            const renderNode = (node: TaxaNode, container: HTMLElement, depth: number, path: string) => {
+              const isLeaf = node.children.size === 0;
+              const hasMany = node.children.size > 1;
+              const nodeId = `${path}>${node.rank}:${node.name}`;
+              selectedMarkersByNode.set(nodeId, new Set(node.markers));
+
+              const row = document.createElement('div');
+              row.className = `tree-row${isLeaf ? ' tree-leaf' : ''}`;
+              row.style.paddingLeft = `${8 + depth * 14}px`;
+
+              const chevron = isLeaf ? '' : `<span class="tree-chevron">${getIconSvg('chevron-right')}</span>`;
+              const rankTag = node.rank !== 'root' ? `<span class="tree-rank">${rankLabel(node.rank)}</span>` : '';
+              const nameClass = node.rank === 'species' ? 'tree-name tree-species-name' : 'tree-name';
+
+              row.innerHTML = `${chevron}${rankTag}<span class="${nameClass}">${node.name}</span><span class="legend-count">${node.count}</span>`;
+
+              container.appendChild(row);
+
+              let childContainer: HTMLElement | null = null;
+              if (!isLeaf) {
+                childContainer = document.createElement('div');
+                childContainer.className = 'tree-children';
+                if (!hasMany && depth > 0) childContainer.classList.add('open');
+                else if (depth === 0) childContainer.classList.add('open');
+                container.appendChild(childContainer);
+
+                if (childContainer.classList.contains('open')) row.classList.add('expanded');
+
+                row.addEventListener('click', (e) => {
+                  if ((e.target as HTMLElement).closest('.tree-eye') || (e.target as HTMLElement).closest('.tree-filter') || (e.target as HTMLElement).closest('.tree-list')) return;
+                  if (!childContainer) return;
+                  const isOpen = childContainer.classList.toggle('open');
+                  row.classList.toggle('expanded', isOpen);
+                });
+              }
+
+              const eyeBtn = document.createElement('button');
+              eyeBtn.className = 'tree-eye';
+              eyeBtn.title = 'Toggle visibility';
+              eyeBtn.innerHTML = getIconSvg('eye');
+              row.appendChild(eyeBtn);
+
+              let visible = true;
+              eyeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                visible = !visible;
+                eyeBtn.innerHTML = getIconSvg(visible ? 'eye' : 'eye-off');
+                row.classList.toggle('tree-hidden', !visible);
+                node.markers.forEach(m => (visible ? hiddenMarkers.delete(m) : hiddenMarkers.add(m)));
+                refreshVisibility();
+              });
+
+              const filterBtn = document.createElement('button');
+              filterBtn.className = 'tree-filter';
+              filterBtn.title = 'Filter by this branch/species';
+              filterBtn.innerHTML = getIconSvg('filter');
+              row.appendChild(filterBtn);
+
+              filterBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const isSelected = selectedNodes.has(nodeId);
+                if (isSelected) selectedNodes.delete(nodeId);
+                else selectedNodes.add(nodeId);
+                row.classList.toggle('tree-selected', !isSelected);
+                refreshVisibility();
+              });
+
+              const listBtn = document.createElement('button');
+              listBtn.className = 'tree-list';
+              listBtn.title = 'Show species list';
+              listBtn.innerHTML = getIconSvg('list');
+              row.appendChild(listBtn);
+
+              const speciesPanel = document.createElement('div');
+              speciesPanel.className = 'tree-species-table';
+              speciesPanel.style.display = 'none';
+              speciesPanel.style.paddingLeft = `${20 + depth * 14}px`;
+              container.appendChild(speciesPanel);
+
+              listBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const opening = speciesPanel.style.display === 'none';
+                if (opening) {
+                  speciesPanel.innerHTML = '';
+                  const bySpecies = new Map<string, L.Marker[]>();
+                  node.markers.forEach(m => {
+                    const sp = markerSpecies.get(m) || 'Unknown species';
+                    if (!bySpecies.has(sp)) bySpecies.set(sp, []);
+                    bySpecies.get(sp)!.push(m);
+                  });
+                  const rows = [...bySpecies.entries()].sort((a, b) => b[1].length - a[1].length);
+                  rows.forEach(([speciesName, markers], idx) => {
+                    const spId = `${nodeId}::sp::${idx}`;
+                    selectedMarkersByNode.set(spId, new Set(markers));
+
+                    const spRow = document.createElement('div');
+                    spRow.className = 'tree-species-row';
+                    spRow.dataset.filterId = spId;
+
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'tree-species-item';
+                    nameEl.textContent = speciesName;
+
+                    const countEl = document.createElement('span');
+                    countEl.className = 'legend-count';
+                    countEl.textContent = String(markers.length);
+
+                    const btnGroup = document.createElement('div');
+                    btnGroup.className = 'tree-species-actions';
+
+                    const spEye = document.createElement('button');
+                    spEye.className = 'tree-eye tree-eye-inline';
+                    spEye.title = 'Toggle visibility';
+                    let spVisible = !markers.every(m => hiddenMarkers.has(m));
+                    spEye.innerHTML = getIconSvg(spVisible ? 'eye' : 'eye-off');
+                    spRow.classList.toggle('tree-hidden', !spVisible);
+                    if (selectedNodes.has(spId)) spRow.classList.add('tree-selected');
+                    spEye.addEventListener('click', (e) => {
+                      e.stopPropagation();
+                      spVisible = !spVisible;
+                      spEye.innerHTML = getIconSvg(spVisible ? 'eye' : 'eye-off');
+                      spRow.classList.toggle('tree-hidden', !spVisible);
+                      markers.forEach(m => (spVisible ? hiddenMarkers.delete(m) : hiddenMarkers.add(m)));
+                      refreshVisibility();
+                    });
+
+                    const spFilter = document.createElement('button');
+                    spFilter.className = 'tree-filter tree-filter-inline';
+                    spFilter.title = 'Filter by this species';
+                    spFilter.innerHTML = getIconSvg('filter');
+                    spFilter.addEventListener('click', (e) => {
+                      e.stopPropagation();
+                      const on = selectedNodes.has(spId);
+                      if (on) selectedNodes.delete(spId);
+                      else selectedNodes.add(spId);
+                      spRow.classList.toggle('tree-selected', !on);
+                      refreshVisibility();
+                    });
+
+                    btnGroup.appendChild(spEye);
+                    btnGroup.appendChild(spFilter);
+                    spRow.appendChild(nameEl);
+                    spRow.appendChild(countEl);
+                    spRow.appendChild(btnGroup);
+                    speciesPanel.appendChild(spRow);
+                  });
+                  speciesPanel.style.display = 'block';
+                  row.classList.add('table-open');
+                } else {
+                  speciesPanel.querySelectorAll<HTMLElement>('.tree-species-row[data-filter-id]').forEach(el => {
+                    const fid = el.dataset.filterId;
+                    if (fid) {
+                      selectedMarkersByNode.delete(fid);
+                      selectedNodes.delete(fid);
+                    }
+                  });
+                  speciesPanel.innerHTML = '';
+                  speciesPanel.style.display = 'none';
+                  row.classList.remove('table-open');
+                  refreshVisibility();
+                }
+              });
+
+              if (childContainer) {
+                const sorted = [...node.children.values()].sort((a, b) => b.count - a.count);
+                for (const child of sorted) {
+                  renderNode(child, childContainer, depth + 1, nodeId);
+                }
+              }
+            };
+
+            const sorted = [...tree.children.values()].sort((a, b) => b.count - a.count);
+            for (const child of sorted) {
+              renderNode(child, vectorLegendBody, 0, 'root');
+            }
+
+            const speciesCount = new Set(vectorMarkers.map(m => m.taxonomy.species)).size;
+            showLegendFab(speciesCount);
             openLegend();
           }
 
@@ -1426,6 +1699,7 @@ async function initMap() {
           console.error('Vector Search Error:', e);
           showErrorToast('Area search failed — check your connection and try again.');
         } finally {
+          searchAreaBtn.classList.remove('loading');
           const loaderIcon = searchAreaBtn.querySelector('svg[data-lucide="loader-2"]');
           if (loaderIcon) {
             loaderIcon.outerHTML = getIconSvg('search');
@@ -1441,6 +1715,7 @@ async function initMap() {
         activeFilters.clear();
         hideLegendFab();
         clearPointsBtn.classList.add('hidden');
+        if (searchAreaBtn) searchAreaBtn.classList.remove('hidden');
         if (gbifEnabled && gbifLayer) map.addLayer(gbifLayer);
       });
     }
