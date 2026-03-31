@@ -22,55 +22,98 @@
       </button>
     </div>
 
-    <!-- Dynamic Vector Taxonomy Legend -->
-    <div id="vector-legend" class="vector-legend hidden"></div>
-    
-    <!-- Floating Location Controls (Always reachable bottom-right) -->
-    <div id="location-control" class="location-control floating">
-      <button id="share-btn" class="locate-fab" aria-label="Share Map Link" title="Copy mapped view to clipboard">
-        <i data-lucide="link"></i>
-      </button>
-      <button id="locate-btn" class="locate-fab" aria-label="Find My Location">
-        <i data-lucide="locate"></i>
-      </button>
-      <div id="privacy-badge" class="privacy-notice mini">
-        <i data-lucide="shield-check"></i>
-        <div class="tooltip">Anonymous & Private: We don't track you.</div>
+    <!-- Species Search Panel -->
+    <div id="search-panel" class="search-panel">
+      <div class="search-panel-header">
+        <h3>FILTER SPECIES</h3>
+        <button id="search-panel-close" class="panel-close-btn" aria-label="Close search">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="search-panel-body">
+        <div class="search-container">
+          <input type="text" id="gbif-search" placeholder="Search species, genus, family..." autocomplete="off">
+          <ul id="gbif-results" class="search-results"></ul>
+        </div>
+        <div id="gbif-history" class="history-shelf"></div>
       </div>
     </div>
 
-    <div id="ui-panel" class="glass-panel collapsed">
+    <!-- Dynamic Vector Taxonomy Legend -->
+    <div id="vector-legend" class="vector-legend">
+      <div class="legend-header">
+        <h3>Species</h3>
+        <button id="legend-close" class="panel-close-btn" aria-label="Close legend">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div id="vector-legend-body" class="legend-body"></div>
+    </div>
+    
+    <!-- Floating Speed-Dial Controls -->
+    <div id="location-control" class="speed-dial">
+      <div class="speed-dial-items">
+        <button id="legend-toggle" class="locate-fab legend-fab hidden speed-dial-item" aria-label="Species Legend" title="Species Legend">
+          <i data-lucide="list"></i>
+          <span id="legend-badge" class="fab-badge">0</span>
+        </button>
+        <div class="fab-with-label speed-dial-item">
+          <span id="search-fab-label" class="fab-label">All Species</span>
+          <button id="search-fab" class="locate-fab search-fab" aria-label="Search Species" title="Search Species">
+            <i data-lucide="search"></i>
+          </button>
+        </div>
+        <button id="settings-toggle" class="locate-fab settings-fab speed-dial-item" aria-label="Map Settings" title="Map Settings">
+          <i data-lucide="sliders-horizontal"></i>
+        </button>
+        <button id="share-btn" class="locate-fab speed-dial-item" aria-label="Share Map Link" title="Copy mapped view to clipboard">
+          <i data-lucide="link"></i>
+        </button>
+        <button id="locate-btn" class="locate-fab speed-dial-item" aria-label="Find My Location">
+          <i data-lucide="locate"></i>
+        </button>
+      </div>
+      <button id="menu-fab" class="locate-fab menu-fab" aria-label="Menu" title="Menu">
+        <i data-lucide="plus" class="menu-icon"></i>
+        <span id="menu-filter-label" class="menu-filter-label" style="display:none;"></span>
+      </button>
+    </div>
+
+    <div id="ui-panel" class="glass-panel">
       <div class="drag-handle"></div>
       
       <div class="panel-header">
         <h1>MAP STYLING</h1>
-        <p class="subtitle desktop-only">Configure your mapping experience</p>
+        <button id="panel-close" class="panel-close-btn" aria-label="Close panel">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
-      <div class="ui-section collapsible active" id="styling-section">
-        <div class="section-header">
-          <h2>BASE LAYERS</h2>
-          <i data-lucide="chevron-down" class="chevron"></i>
-        </div>
-        <div class="section-content">
-          <div id="layer-options" class="layer-options">
-            <!-- Buttons will be injected here dynamically -->
+      <div class="panel-body">
+        <div class="ui-section collapsible active" id="styling-section">
+          <div class="section-header">
+            <h2>BASE LAYERS</h2>
+            <i data-lucide="chevron-down" class="chevron"></i>
+          </div>
+          <div class="section-content">
+            <div id="layer-options" class="layer-options">
+              <!-- Buttons will be injected here dynamically -->
+            </div>
           </div>
         </div>
-      </div>
-      
-      <div class="ui-section collapsible active" id="gbif-section">
-        <div class="section-header">
-          <h2>BIODIVERSITY</h2>
-          <i data-lucide="chevron-down" class="chevron"></i>
-        </div>
-        <div class="section-content">
-          <div class="search-container">
-            <input type="text" id="gbif-search" placeholder="Search All Biodiversity..." autocomplete="off">
-            <ul id="gbif-results" class="search-results"></ul>
+        
+        <div class="ui-section collapsible active" id="gbif-section">
+          <div class="section-header">
+            <h2>BIODIVERSITY</h2>
+            <div class="section-header-actions">
+              <label class="layer-toggle" title="Toggle biodiversity layer">
+                <input type="checkbox" id="gbif-toggle" checked>
+                <span class="toggle-track"></span>
+              </label>
+              <i data-lucide="chevron-down" class="chevron"></i>
+            </div>
           </div>
-          <div id="gbif-history" class="history-shelf"></div>
-          
+          <div class="section-content">
           <div class="filter-controls">
             <div class="control-group">
               <span class="label">Visualization Shape</span>
@@ -156,7 +199,9 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
+    <div id="panel-overlay" class="panel-overlay"></div>
     <canvas id="style-tester" width="256" height="256" style="display: none;"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>

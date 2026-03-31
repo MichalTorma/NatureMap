@@ -70,8 +70,10 @@ async function initMap() {
     let currentOpacity = urlParams.has('opacity') ? parseFloat(urlParams.get('opacity')!) : 0.8;
     let currentYear: number | 'ALL' = urlParams.has('year') ? (urlParams.get('year') === 'ALL' ? 'ALL' : parseInt(urlParams.get('year')!)) : 'ALL';
     let currentOrigins: string[] = urlParams.has('origins') ? urlParams.get('origins')!.split(',') : ['HUMAN_OBSERVATION', 'ALL']; 
+    let gbifEnabled = true;
     let isPlaying = false;
     let playInterval: any;
+    let closeSearchPanel = () => {};
     
     const initialLat = urlParams.has('lat') ? parseFloat(urlParams.get('lat')!) : (savedCenter ? JSON.parse(savedCenter)[0] : config.mapOptions.center[0]);
     const initialLng = urlParams.has('lng') ? parseFloat(urlParams.get('lng')!) : (savedCenter ? JSON.parse(savedCenter)[1] : config.mapOptions.center[1]);
@@ -177,6 +179,23 @@ async function initMap() {
 
     const gbifSearch = document.getElementById('gbif-search') as HTMLInputElement;
     const gbifResults = document.getElementById('gbif-results') as HTMLElement;
+    const searchFabLabel = document.getElementById('search-fab-label');
+    const menuFilterLabel = document.getElementById('menu-filter-label');
+
+    const updateFilterLabel = (name: string | null) => {
+      if (searchFabLabel) {
+        searchFabLabel.textContent = name || 'All Species';
+        searchFabLabel.classList.toggle('filtered', !!name);
+      }
+      if (menuFilterLabel) {
+        if (name) {
+          menuFilterLabel.textContent = name;
+          menuFilterLabel.style.display = '';
+        } else {
+          menuFilterLabel.style.display = 'none';
+        }
+      }
+    };
     const gbifYearInput = document.getElementById('gbif-year') as HTMLInputElement;
     const yearValueDisplay = document.getElementById('year-value') as HTMLElement;
     const playBtn = document.getElementById('gbif-play');
@@ -231,6 +250,7 @@ async function initMap() {
       globalChip.addEventListener('click', () => {
         currentTaxonKey = null;
         gbifSearch.value = '';
+        updateFilterLabel(null);
         renderHistory();
         debouncedUpdateGbifLayer(10);
       });
@@ -243,6 +263,7 @@ async function initMap() {
         chip.addEventListener('click', () => {
           currentTaxonKey = h.key;
           gbifSearch.value = h.name;
+          updateFilterLabel(h.name);
           renderHistory();
           debouncedUpdateGbifLayer(10);
         });
@@ -300,6 +321,7 @@ async function initMap() {
 
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
+      if (!gbifEnabled) return;
       const styleParam = resolveGbifStyle(currentPalette, currentShape);
       const yearParam = currentYear === 'ALL' ? '' : `&year=1900,${currentYear}`;
       let originParam = '';
@@ -381,8 +403,10 @@ async function initMap() {
               currentTaxonKey = s.key;
               gbifSearch.value = nameToUse;
               gbifResults.style.display = 'none';
+              updateFilterLabel(nameToUse);
               saveToHistory({ key: s.key, name: nameToUse });
               debouncedUpdateGbifLayer(10);
+              closeSearchPanel();
             });
             gbifResults.appendChild(li);
           });
@@ -563,31 +587,63 @@ async function initMap() {
     const searchAreaBtn = document.getElementById('search-area-btn');
     const clearPointsBtn = document.getElementById('clear-points-btn');
     const vectorLegend = document.getElementById('vector-legend');
+    const vectorLegendBody = document.getElementById('vector-legend-body');
+    const legendToggle = document.getElementById('legend-toggle');
+    const legendClose = document.getElementById('legend-close');
+    const legendBadge = document.getElementById('legend-badge');
     const vectorLayer = L.layerGroup().addTo(map);
+
+    const openLegend = () => {
+      vectorLegend?.classList.add('open');
+      legendToggle?.classList.add('active');
+    };
+    const closeLegend = () => {
+      vectorLegend?.classList.remove('open');
+      legendToggle?.classList.remove('active');
+    };
+    const showLegendFab = (count: number) => {
+      legendToggle?.classList.remove('hidden');
+      if (legendBadge) legendBadge.textContent = count.toString();
+    };
+    const hideLegendFab = () => {
+      legendToggle?.classList.add('hidden');
+      closeLegend();
+    };
+
+    legendToggle?.addEventListener('click', () => {
+      if (vectorLegend?.classList.contains('open')) closeLegend();
+      else openLegend();
+    });
+    legendClose?.addEventListener('click', closeLegend);
 
     let vectorMarkers: { cssClass: string, label: string, iconUrl: string, marker: L.Marker }[] = [];
     let activeFilters: Set<string> = new Set();
 
-    const getTaxaInfo = (className: string) => {
+    const getTaxaInfo = (className: string, hasImage = false) => {
       let iconName = 'leaf';
       let cssClass = 'default';
       let label = 'Unknown';
       const c = className ? className.toLowerCase() : '';
       if (c === 'aves') { iconName = 'bird'; cssClass = 'aves'; label = 'Birds'; }
       else if (c === 'mammalia') { iconName = 'paw-print'; cssClass = 'mammalia'; label = 'Mammals'; }
-      else if (c === 'plantae' || c === 'magnoliopsida' || c === 'liliopsida') { iconName = 'leaf'; cssClass = 'plantae'; label = 'Plants'; }
+      else if (c === 'plantae' || c === 'magnoliopsida' || c === 'liliopsida' || c === 'polypodiopsida' || c === 'pinopsida') { iconName = 'leaf'; cssClass = 'plantae'; label = 'Plants'; }
       else if (c === 'insecta') { iconName = 'bug'; cssClass = 'insecta'; label = 'Insects'; }
-      else if (c === 'fungi' || c === 'agaricomycetes') { iconName = 'tree-pine'; cssClass = 'fungi'; label = 'Fungi'; }
+      else if (c === 'fungi' || c === 'agaricomycetes' || c === 'lecanoromycetes' || c === 'sordariomycetes') { iconName = 'sprout'; cssClass = 'fungi'; label = 'Fungi'; }
       else if (c === 'reptilia') { iconName = 'turtle'; cssClass = 'reptilia'; label = 'Reptiles'; }
-      else if (c === 'amphibia') { iconName = 'droplet'; cssClass = 'amphibia'; label = 'Amphibians'; }
-      else if (c === 'actinopterygii') { iconName = 'fish'; cssClass = 'actinopterygii'; label = 'Fish'; }
-      else if (c === 'arachnida') { iconName = 'spider'; cssClass = 'arachnida'; label = 'Arachnids'; }
+      else if (c === 'amphibia') { iconName = 'egg'; cssClass = 'amphibia'; label = 'Amphibians'; }
+      else if (c === 'actinopterygii' || c === 'chondrichthyes') { iconName = 'fish'; cssClass = 'actinopterygii'; label = 'Fish'; }
+      else if (c === 'arachnida') { iconName = 'waypoints'; cssClass = 'arachnida'; label = 'Arachnids'; }
+      else if (c === 'gastropoda') { iconName = 'snail'; cssClass = 'gastropoda'; label = 'Snails'; }
+      else if (c === 'malacostraca') { iconName = 'shrimp'; cssClass = 'malacostraca'; label = 'Crustaceans'; }
+      else if (c === 'bivalvia' || c === 'cephalopoda' || c === 'polyplacophora') { iconName = 'shell'; cssClass = 'mollusca'; label = 'Molluscs'; }
       else { label = className ? className.charAt(0).toUpperCase() + className.slice(1) : 'Unknown'; }
+      
+      const photoBadge = hasImage ? `<span class="marker-photo-badge">${getIconSvg('camera')}</span>` : '';
       
       return {
         icon: L.divIcon({
           className: 'custom-taxa-icon',
-          html: `<div class="taxa-marker ${cssClass}">${getIconSvg(iconName)}</div>`,
+          html: `<div class="taxa-marker ${cssClass}">${getIconSvg(iconName)}${photoBadge}</div>`,
           iconSize: [38, 38],
           iconAnchor: [19, 19],
           popupAnchor: [0, -19]
@@ -610,6 +666,7 @@ async function initMap() {
 
     if (searchAreaBtn) {
       searchAreaBtn.addEventListener('click', async () => {
+        if (!gbifEnabled) return;
         const bounds = map.getBounds();
         const iconContainer = searchAreaBtn.querySelector('i')?.parentElement;
         
@@ -628,7 +685,7 @@ async function initMap() {
         try {
           vectorLayer.clearLayers();
           vectorMarkers = [];
-          if (vectorLegend) vectorLegend.classList.add('hidden');
+          hideLegendFab();
           
           let offset = 0;
           let keepFetching = true;
@@ -648,13 +705,15 @@ async function initMap() {
             
             data.results.forEach((occ: any) => {
               if (!occ.decimalLatitude || !occ.decimalLongitude) return;
-              const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum);
+              const media = occ.media?.find((m: any) => m.type === 'StillImage' && m.identifier)?.identifier
+                         || occ.media?.[0]?.identifier || '';
+              const hasImage = !!media && (media.startsWith('http://') || media.startsWith('https://'));
+              const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum, hasImage);
               const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
                 icon: taxaInfo.icon
               }).addTo(vectorLayer);
               
-              const media = occ.media?.[0]?.identifier;
-              const imgHtml = media ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy">` : '';
+              const imgHtml = hasImage ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy" onerror="this.remove()">` : '';
               const popupHtml = `
                 <div class="vector-popup">
                   ${imgHtml}
@@ -693,16 +752,15 @@ async function initMap() {
              return acc;
           }, {} as any);
 
-          if (vectorLegend && Object.keys(taxaCounts).length > 0) {
-            vectorLegend.innerHTML = '';
-            vectorLegend.classList.remove('hidden');
+          if (vectorLegendBody && Object.keys(taxaCounts).length > 0) {
+            vectorLegendBody.innerHTML = '';
             activeFilters = new Set(Object.keys(taxaCounts));
             
             if (totalCount > MAX_POINTS) {
                const warning = document.createElement('div');
                warning.className = 'legend-warning';
                warning.innerHTML = `${getIconSvg('alert-triangle')} Showing ${MAX_POINTS.toLocaleString()} of ${totalCount.toLocaleString()} points`;
-               vectorLegend.appendChild(warning);
+               vectorLegendBody.appendChild(warning);
             }
 
             Object.entries(taxaCounts).forEach(([cClass, info]: any) => {
@@ -724,8 +782,11 @@ async function initMap() {
                    vectorMarkers.filter(m => m.cssClass === cClass).forEach(m => vectorLayer.addLayer(m.marker));
                  }
                });
-               vectorLegend.appendChild(btn);
+               vectorLegendBody.appendChild(btn);
             });
+
+            showLegendFab(Object.keys(taxaCounts).length);
+            openLegend();
           }
 
 
@@ -746,9 +807,9 @@ async function initMap() {
         vectorLayer.clearLayers();
         vectorMarkers = [];
         activeFilters.clear();
-        if (vectorLegend) vectorLegend.classList.add('hidden');
+        hideLegendFab();
         clearPointsBtn.classList.add('hidden');
-        if (gbifLayer) map.addLayer(gbifLayer); // Restore heat map
+        if (gbifLayer) map.addLayer(gbifLayer);
       });
     }
 
@@ -772,19 +833,99 @@ async function initMap() {
       b.classList.toggle('active', b.getAttribute('data-palette') === currentPalette);
     });
 
-    // 5. UI Interactivity (Mobile Toggles & Collapsibles)
+    // 5. UI Interactivity (Speed-dial, panel toggle, collapsibles, biodiversity toggle)
+    const speedDial = document.getElementById('location-control');
+    const menuFab = document.getElementById('menu-fab');
+
+    const closeMenu = () => speedDial?.classList.remove('open');
+    menuFab?.addEventListener('click', () => speedDial?.classList.toggle('open'));
+    map.on('click', closeMenu);
+
     const uiPanel = document.getElementById('ui-panel');
-    const panelHeader = uiPanel?.querySelector('.panel-header');
-    if (panelHeader) {
-      panelHeader.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-          uiPanel?.classList.toggle('collapsed');
+    const panelOverlay = document.getElementById('panel-overlay');
+    const settingsToggle = document.getElementById('settings-toggle');
+    const panelCloseBtn = document.getElementById('panel-close');
+    const gbifToggle = document.getElementById('gbif-toggle') as HTMLInputElement;
+
+    const openPanel = () => {
+      uiPanel?.classList.add('open');
+      settingsToggle?.classList.add('active');
+      panelOverlay?.classList.add('active');
+    };
+
+    const closePanel = () => {
+      uiPanel?.classList.remove('open');
+      settingsToggle?.classList.remove('active');
+      panelOverlay?.classList.remove('active');
+    };
+
+    settingsToggle?.addEventListener('click', () => {
+      if (uiPanel?.classList.contains('open')) closePanel();
+      else openPanel();
+    });
+
+    panelCloseBtn?.addEventListener('click', closePanel);
+    panelOverlay?.addEventListener('click', () => {
+      closePanel();
+      closeSearchPanel();
+    });
+
+    // Search Species Panel
+    const searchPanel = document.getElementById('search-panel');
+    const searchFab = document.getElementById('search-fab');
+    const searchPanelClose = document.getElementById('search-panel-close');
+
+    const openSearchPanel = () => {
+      searchPanel?.classList.add('open');
+      searchFab?.classList.add('active');
+      panelOverlay?.classList.add('active');
+      setTimeout(() => gbifSearch?.focus(), 150);
+    };
+
+    closeSearchPanel = () => {
+      searchPanel?.classList.remove('open');
+      searchFab?.classList.remove('active');
+      if (!uiPanel?.classList.contains('open')) {
+        panelOverlay?.classList.remove('active');
+      }
+    };
+
+    searchFab?.addEventListener('click', () => {
+      if (searchPanel?.classList.contains('open')) closeSearchPanel();
+      else openSearchPanel();
+    });
+    searchPanelClose?.addEventListener('click', closeSearchPanel);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (searchPanel?.classList.contains('open')) closeSearchPanel();
+        else if (uiPanel?.classList.contains('open')) closePanel();
+        else if (speedDial?.classList.contains('open')) speedDial.classList.remove('open');
+      }
+    });
+
+    if (gbifToggle) {
+      gbifToggle.addEventListener('click', (e) => e.stopPropagation());
+      gbifToggle.addEventListener('change', () => {
+        gbifEnabled = gbifToggle.checked;
+        if (gbifEnabled) {
+          updateGbifLayer();
+        } else {
+          if (gbifLayer) map.removeLayer(gbifLayer);
+          vectorLayer.clearLayers();
+          vectorMarkers = [];
+          activeFilters.clear();
+          hideLegendFab();
+          if (clearPointsBtn) clearPointsBtn.classList.add('hidden');
         }
       });
     }
+
     const collapsibles = document.querySelectorAll('.collapsible');
     collapsibles.forEach(section => {
-      section.querySelector('.section-header')?.addEventListener('click', () => {
+      section.querySelector('.section-header')?.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.layer-toggle')) return;
         section.classList.toggle('active');
       });
     });
@@ -800,6 +941,11 @@ async function initMap() {
     
     // 6. Final Initialization
     renderHistory();
+    if (currentTaxonKey && gbifSearch.value) updateFilterLabel(gbifSearch.value);
+    else if (currentTaxonKey) {
+      const match = currentHistory.find(h => h.key === currentTaxonKey);
+      updateFilterLabel(match ? match.name : `Taxon ${currentTaxonKey}`);
+    }
     checkGbifHealth();
     validateAllPalettes(currentShape);
     updateGbifLayer();
