@@ -1,5 +1,8 @@
 import './style.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import L from 'leaflet';
+import 'leaflet.markercluster';
 import * as LucideIcons from 'lucide';
 import codes, { by639_1, by639_2T, by639_2B, type Code } from 'iso-language-codes';
 
@@ -874,7 +877,71 @@ async function initMap() {
     const legendToggle = document.getElementById('legend-toggle');
     const legendClose = document.getElementById('legend-close');
     const legendBadge = document.getElementById('legend-badge');
-    const vectorLayer = L.layerGroup().addTo(map);
+    const TAXA_COLORS: Record<string, string> = {
+      aves: '#3b82f6', mammalia: '#f97316', plantae: '#22c55e', insecta: '#a855f7',
+      fungi: '#84cc16', reptilia: '#14b8a6', amphibia: '#06b6d4', actinopterygii: '#2563eb',
+      arachnida: '#eab308', gastropoda: '#ec4899', malacostraca: '#f43f5e',
+      mollusca: '#d946ef', default: '#64748b'
+    };
+
+    const createClusterIcon = (cluster: L.MarkerCluster) => {
+      const children = cluster.getAllChildMarkers();
+      const counts: Record<string, number> = {};
+      children.forEach(m => {
+        const cls = (m.options as any).taxaCssClass || 'default';
+        counts[cls] = (counts[cls] || 0) + 1;
+      });
+      const total = children.length;
+      const size = total < 20 ? 44 : total < 100 ? 52 : 60;
+      const r = size / 2;
+      const inner = r * 0.55;
+
+      let segments = '';
+      let angle = 0;
+      for (const [cls, count] of Object.entries(counts)) {
+        const sliceAngle = (count / total) * 360;
+        const startRad = (angle - 90) * Math.PI / 180;
+        const endRad = (angle + sliceAngle - 90) * Math.PI / 180;
+        const largeArc = sliceAngle > 180 ? 1 : 0;
+        const x1o = r + r * Math.cos(startRad), y1o = r + r * Math.sin(startRad);
+        const x2o = r + r * Math.cos(endRad), y2o = r + r * Math.sin(endRad);
+        const x1i = r + inner * Math.cos(endRad), y1i = r + inner * Math.sin(endRad);
+        const x2i = r + inner * Math.cos(startRad), y2i = r + inner * Math.sin(startRad);
+        const color = TAXA_COLORS[cls] || TAXA_COLORS.default;
+        if (Object.keys(counts).length === 1) {
+          segments += `<circle cx="${r}" cy="${r}" r="${r}" fill="${color}"/>`;
+          segments += `<circle cx="${r}" cy="${r}" r="${inner}" fill="rgba(15,23,42,0.85)"/>`;
+        } else {
+          segments += `<path d="M${x1o},${y1o} A${r},${r} 0 ${largeArc} 1 ${x2o},${y2o} L${x1i},${y1i} A${inner},${inner} 0 ${largeArc} 0 ${x2i},${y2i} Z" fill="${color}"/>`;
+        }
+        angle += sliceAngle;
+      }
+
+      const centerBg = Object.keys(counts).length > 1
+        ? `<circle cx="${r}" cy="${r}" r="${inner}" fill="rgba(15,23,42,0.85)"/>`
+        : '';
+      const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+        ${segments}${centerBg}
+        <text x="${r}" y="${r}" text-anchor="middle" dy=".35em" fill="#fff" font-size="${size < 50 ? 12 : 14}" font-weight="700" font-family="Inter,system-ui,sans-serif">${total}</text>
+      </svg>`;
+
+      return L.divIcon({
+        html: `<div class="cluster-donut">${svg}</div>`,
+        className: 'custom-cluster-icon',
+        iconSize: L.point(size, size),
+        iconAnchor: L.point(size / 2, size / 2)
+      });
+    };
+
+    const vectorLayer = (L as any).markerClusterGroup({
+      maxClusterRadius: 45,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      iconCreateFunction: createClusterIcon,
+      animate: true,
+      animateAddingMarkers: false
+    }).addTo(map);
 
     const openLegend = () => {
       vectorLegend?.classList.add('open');
@@ -993,8 +1060,9 @@ async function initMap() {
               const hasImage = !!media && (media.startsWith('http://') || media.startsWith('https://'));
               const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum, hasImage);
               const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
-                icon: taxaInfo.icon
-              }).addTo(vectorLayer);
+                icon: taxaInfo.icon,
+                taxaCssClass: taxaInfo.cssClass
+              } as any).addTo(vectorLayer);
               
               const imgHtml = hasImage ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy" onerror="this.remove()">` : '';
               const popupHtml = `

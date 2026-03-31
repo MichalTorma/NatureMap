@@ -746,6 +746,24 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0), 0 2px 8px rgba(0, 0, 0, 0.4); }
 }
 
+/* Marker Cluster */
+.custom-cluster-icon {
+  background: transparent !important;
+  border: none !important;
+}
+.cluster-donut {
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.cluster-donut:hover {
+  transform: scale(1.15);
+}
+.leaflet-cluster-anim .leaflet-marker-icon,
+.leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
 .locate-fab.geo-warn::after {
   content: '';
   position: absolute;
