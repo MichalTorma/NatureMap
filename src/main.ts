@@ -310,8 +310,8 @@ async function initMap() {
       
       const isBinned = currentShape === 'hex' || currentShape === 'square';
       const maxNative = isBinned
-        ? (currentScaleMode === 'geographic' ? 15 : 11)
-        : 16;
+        ? (currentScaleMode === 'geographic' ? 17 : 14)
+        : 17;
 
       gbifLayer = new (GbifLayerClass as any)(url, { 
         opacity: currentOpacity, 
