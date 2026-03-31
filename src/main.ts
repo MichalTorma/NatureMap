@@ -6,6 +6,51 @@ import 'leaflet.markercluster';
 import * as LucideIcons from 'lucide';
 import codes, { by639_1, by639_2T, by639_2B, type Code } from 'iso-language-codes';
 
+/* Minimal MD5 – RFC 1321 */
+function md5(str: string): string {
+  const k = new Uint32Array(64);
+  for (let i = 0; i < 64; i++) k[i] = (Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0;
+  const s = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+             5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+             4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+             6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const bytes: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c < 0x80) bytes.push(c);
+    else if (c < 0x800) { bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f)); }
+    else { bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f)); }
+  }
+  const bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  bytes.push(bitLen & 0xff, (bitLen >>> 8) & 0xff, (bitLen >>> 16) & 0xff, (bitLen >>> 24) & 0xff, 0, 0, 0, 0);
+  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+  for (let i = 0; i < bytes.length; i += 64) {
+    const m = new Uint32Array(16);
+    for (let j = 0; j < 64; j += 4) m[j >> 2] = bytes[i+j] | (bytes[i+j+1] << 8) | (bytes[i+j+2] << 16) | (bytes[i+j+3] << 24);
+    let [a, b, c, d] = [a0, b0, c0, d0];
+    for (let j = 0; j < 64; j++) {
+      let f: number, g: number;
+      if (j < 16) { f = (b & c) | (~b & d); g = j; }
+      else if (j < 32) { f = (d & b) | (~d & c); g = (5*j+1) % 16; }
+      else if (j < 48) { f = b ^ c ^ d; g = (3*j+5) % 16; }
+      else { f = c ^ (b | ~d); g = (7*j) % 16; }
+      const tmp = d; d = c; c = b;
+      const x = (a + f + k[j] + m[g]) | 0;
+      b = (b + ((x << s[j]) | (x >>> (32 - s[j])))) | 0;
+      a = tmp;
+    }
+    a0 = (a0 + a) | 0; b0 = (b0 + b) | 0; c0 = (c0 + c) | 0; d0 = (d0 + d) | 0;
+  }
+  const hex = (v: number) => Array.from({length: 4}, (_, i) => ((v >>> (i * 8)) & 0xff).toString(16).padStart(2, '0')).join('');
+  return hex(a0) + hex(b0) + hex(c0) + hex(d0);
+}
+
+function gbifThumb(occurrenceKey: number | string, mediaUrl: string, width = 300): string {
+  return `https://api.gbif.org/v1/image/cache/${width}x/occurrence/${occurrenceKey}/media/${md5(mediaUrl)}`;
+}
+
 interface LayerConfig {
   id: string;
   type: 'xyz' | 'wms';
@@ -689,12 +734,12 @@ async function initMap() {
             const validImage = image && (image.startsWith('http://') || image.startsWith('https://'));
 
             if (validImage) {
+              const occKey = occData.results[0].key;
               const img = document.createElement('img');
-              img.src = image;
+              img.src = gbifThumb(occKey, image, 80);
               img.className = 'search-avatar';
               img.alt = row.s.canonicalName || '';
               img.loading = 'lazy';
-              img.referrerPolicy = 'no-referrer';
               img.onerror = () => { img.outerHTML = `<div class="search-avatar">${getIconSvg('leaf')}</div>`; };
               row.avatarEl.replaceWith(img);
             }
@@ -1248,12 +1293,16 @@ async function initMap() {
                          || occ.media?.[0]?.identifier || '';
               const hasImage = !!media && (media.startsWith('http://') || media.startsWith('https://'));
               const taxaInfo = getTaxaInfo(occ.class || occ.kingdom || occ.phylum, hasImage);
+              const thisYear = new Date().getFullYear();
+              const age = occ.year ? Math.max(0, Math.min(1, (occ.year - 1900) / (thisYear - 1900))) : 1;
               const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
                 icon: taxaInfo.icon,
+                opacity: 0.35 + 0.65 * age,
                 taxaCssClass: taxaInfo.cssClass
               } as any).addTo(vectorLayer);
               
-              const imgHtml = hasImage ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
+              const thumbUrl = hasImage ? gbifThumb(occ.key, media) : '';
+              const imgHtml = hasImage ? `<img src="${thumbUrl}" alt="${occ.scientificName || ''}" loading="lazy" onerror="this.remove()">` : '';
               const popupHtml = `
                 <div class="vector-popup">
                   ${imgHtml}
@@ -1266,12 +1315,14 @@ async function initMap() {
               const popupTaxonKey = occ.speciesKey || occ.taxonKey;
               if (popupTaxonKey) {
                 marker.on('popupopen', async () => {
-                  const names = await resolveVernacularNames(popupTaxonKey);
                   const el = marker.getPopup()?.getElement()?.querySelector('.vernacular-popup');
-                  if (el && names.length > 0) {
-                    el.innerHTML = names.map(n =>
-                      `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`
-                    ).join(' · ');
+                  if (el && !el.innerHTML.trim()) {
+                    const names = await resolveVernacularNames(popupTaxonKey);
+                    if (names.length > 0) {
+                      el.innerHTML = names.map(n =>
+                        `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`
+                      ).join(' · ');
+                    }
                   }
                 });
               }
