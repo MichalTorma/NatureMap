@@ -459,7 +459,7 @@ body {
   margin-top: 4px;
 }
 
-.search-results li {
+  .search-results li {
   padding: 10px 14px;
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -467,6 +467,7 @@ body {
   grid-template-columns: 44px 1fr;
   grid-template-areas: 
     "avatar title"
+    "avatar langs"
     "avatar subtitle";
   column-gap: 14px;
   align-items: center;
@@ -1269,4 +1270,178 @@ body {
   }
 }
 
+/* Vernacular Name Tags */
+.vernacular-names {
+  grid-area: langs;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: center;
+  line-height: 1.4;
+}
+.vernacular-names:empty { display: none; }
+.vn-sep { color: rgba(255, 255, 255, 0.15); }
 
+.lang-tag {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* Popup Vernacular Names */
+.vernacular-popup {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+.vernacular-popup:empty { display: none; }
+.vernacular-popup .lang-tag { font-size: 0.55rem; }
+
+/* Language Settings */
+.language-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.language-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  transition: all 0.2s;
+}
+
+.language-chip:first-child {
+  border-color: var(--accent-color);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.lang-chip-code {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.5px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.language-chip:first-child .lang-chip-code {
+  background: rgba(59, 130, 246, 0.3);
+  color: #93bbfc;
+}
+
+.lang-chip-name {
+  flex: 1;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.lang-chip-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.lang-chip-move,
+.lang-chip-remove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s;
+}
+
+.lang-chip-move:hover,
+.lang-chip-remove:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.lang-chip-remove:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.lang-chip-move svg,
+.lang-chip-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+.lang-add-container {
+  position: relative;
+}
+
+.lang-search-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.lang-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 3000;
+  margin-top: 4px;
+  display: none;
+}
+
+.lang-dropdown li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-dropdown li:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.lang-native {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.7rem;
+}

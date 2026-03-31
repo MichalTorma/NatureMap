@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
+    "iso-language-codes": "^2.0.0",
     "leaflet": "^1.9.4",
     "lucide": "^1.7.0"
   }

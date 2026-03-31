@@ -1,6 +1,7 @@
 import './style.css';
 import L from 'leaflet';
 import * as LucideIcons from 'lucide';
+import codes, { by639_1, by639_2T, by639_2B, type Code } from 'iso-language-codes';
 
 interface LayerConfig {
   id: string;
@@ -74,6 +75,22 @@ async function initMap() {
     let isPlaying = false;
     let playInterval: any;
     let closeSearchPanel = () => {};
+
+    const STORAGE_KEY_LANGS = 'mymap_languages';
+    const langLookup1 = by639_1 as Record<string, Code | undefined>;
+    const langLookup2T = by639_2T as Record<string, Code | undefined>;
+    const langLookup2B = by639_2B as Record<string, Code | undefined>;
+    const resolveIso1 = (code3: string): string | undefined =>
+      langLookup2T[code3]?.iso639_1 ?? langLookup2B[code3]?.iso639_1;
+    const defaultLangs = (() => {
+      const bl = navigator.language?.split('-')[0] || 'en';
+      const langs = [bl];
+      if (bl !== 'en') langs.push('en');
+      return langs.filter(l => langLookup1[l]);
+    })();
+    let userLanguages: string[] = urlParams.has('langs')
+      ? urlParams.get('langs')!.split(',').filter(l => langLookup1[l])
+      : JSON.parse(localStorage.getItem(STORAGE_KEY_LANGS) || 'null') || defaultLangs;
     
     const initialLat = urlParams.has('lat') ? parseFloat(urlParams.get('lat')!) : (savedCenter ? JSON.parse(savedCenter)[0] : config.mapOptions.center[0]);
     const initialLng = urlParams.has('lng') ? parseFloat(urlParams.get('lng')!) : (savedCenter ? JSON.parse(savedCenter)[1] : config.mapOptions.center[1]);
@@ -97,6 +114,7 @@ async function initMap() {
       p.set('opacity', currentOpacity.toString());
       p.set('year', currentYear.toString());
       p.set('origins', currentOrigins.join(','));
+      if (userLanguages.length > 0) p.set('langs', userLanguages.join(','));
       window.history.replaceState(null, '', `?${p.toString()}`);
     };
 
@@ -238,8 +256,20 @@ async function initMap() {
     };
 
     // History Logic
-    interface TaxonHistory { key: number | null; name: string; }
+    interface VnName { lang: string; name: string }
+    interface TaxonHistory { key: number | null; name: string; names?: VnName[]; }
     let currentHistory: TaxonHistory[] = JSON.parse(localStorage.getItem('gbif_history') || '[]');
+
+    const getPrimaryName = (h: TaxonHistory): string => {
+      if (h.names && h.names.length > 0) {
+        for (const lc of userLanguages) {
+          const m = h.names.find(n => n.lang === lc);
+          if (m) return m.name;
+        }
+        return h.names[0].name;
+      }
+      return h.name;
+    };
 
     const renderHistory = () => {
       if (!historyShelf) return;
@@ -259,11 +289,12 @@ async function initMap() {
       currentHistory.forEach(h => {
         const chip = document.createElement('div');
         chip.className = `history-chip ${currentTaxonKey === h.key ? 'active' : ''}`;
-        chip.textContent = h.name;
+        const displayName = getPrimaryName(h);
+        chip.textContent = displayName;
         chip.addEventListener('click', () => {
           currentTaxonKey = h.key;
-          gbifSearch.value = h.name;
-          updateFilterLabel(h.name);
+          gbifSearch.value = displayName;
+          updateFilterLabel(displayName);
           renderHistory();
           debouncedUpdateGbifLayer(10);
         });
@@ -277,6 +308,37 @@ async function initMap() {
       currentHistory = currentHistory.slice(0, 8);
       localStorage.setItem('gbif_history', JSON.stringify(currentHistory));
       renderHistory();
+    };
+
+    // Vernacular Name Resolver
+    const vnCache = new Map<number, VnName[]>();
+
+    const resolveVernacularNames = async (taxonKey: number): Promise<VnName[]> => {
+      if (!vnCache.has(taxonKey)) {
+        try {
+          const res = await fetch(
+            `https://api.gbif.org/v1/species/${taxonKey}/vernacularNames?limit=200`
+          );
+          const data = await res.json();
+          const allNames: VnName[] = [];
+          for (const vn of data.results || []) {
+            if (!vn.vernacularName || !vn.language) continue;
+            const iso1 = resolveIso1(vn.language);
+            if (iso1) allNames.push({ lang: iso1, name: vn.vernacularName });
+          }
+          vnCache.set(taxonKey, allNames);
+        } catch {
+          vnCache.set(taxonKey, []);
+        }
+      }
+      const all = vnCache.get(taxonKey)!;
+      const result: VnName[] = [];
+      const seen = new Set<string>();
+      for (const lc of userLanguages) {
+        const match = all.find(n => n.lang === lc && !seen.has(lc));
+        if (match) { result.push(match); seen.add(lc); }
+      }
+      return result;
     };
 
     // Style Validation Logic
@@ -381,7 +443,10 @@ async function initMap() {
             return aRank - bRank;
           });
 
-        const rows: { li: HTMLElement; s: any; countEl: HTMLElement; avatarEl: HTMLElement }[] = [];
+        const rows: {
+          li: HTMLElement; s: any; countEl: HTMLElement; avatarEl: HTMLElement;
+          vnEl: HTMLElement; resolvedNames: VnName[]; primaryName: string;
+        }[] = [];
 
         candidates.forEach((s: any) => {
           const li = document.createElement('li');
@@ -395,38 +460,44 @@ async function initMap() {
               ${rankHtml}
               <span class="scientific">${s.scientificName}</span>
             </div>
+            <div class="vernacular-names"></div>
             <div class="obs-count">
               ${getIconSvg('loader-2')}
               <span class="obs-count-text">...</span>
             </div>
           `;
 
+          const rowData = {
+            li, s,
+            countEl: li.querySelector('.obs-count-text') as HTMLElement,
+            avatarEl: li.querySelector('.search-avatar') as HTMLElement,
+            vnEl: li.querySelector('.vernacular-names') as HTMLElement,
+            resolvedNames: [] as VnName[],
+            primaryName: nameToUse
+          };
+
           li.addEventListener('click', () => {
             currentTaxonKey = s.key;
-            gbifSearch.value = nameToUse;
+            gbifSearch.value = rowData.primaryName;
             gbifResults.style.display = 'none';
-            updateFilterLabel(nameToUse);
-            saveToHistory({ key: s.key, name: nameToUse });
+            updateFilterLabel(rowData.primaryName);
+            saveToHistory({ key: s.key, name: rowData.primaryName, names: rowData.resolvedNames });
             debouncedUpdateGbifLayer(10);
             closeSearchPanel();
           });
           gbifResults.appendChild(li);
-
-          rows.push({
-            li,
-            s,
-            countEl: li.querySelector('.obs-count-text') as HTMLElement,
-            avatarEl: li.querySelector('.search-avatar') as HTMLElement
-          });
+          rows.push(rowData);
         });
 
         const enriched: { row: typeof rows[0]; count: number }[] = [];
         for (const row of rows) {
           if (gen !== searchGeneration) return;
           try {
-            const occRes = await fetch(`https://api.gbif.org/v1/occurrence/search?taxonKey=${row.s.key}&limit=1`);
+            const [occData, vnNames] = await Promise.all([
+              fetch(`https://api.gbif.org/v1/occurrence/search?taxonKey=${row.s.key}&limit=1`).then(r => r.json()),
+              resolveVernacularNames(row.s.key)
+            ]);
             if (gen !== searchGeneration) return;
-            const occData = await occRes.json();
             const count = occData.count || 0;
             const image = occData.results?.[0]?.media?.find((m: any) => m.type === 'StillImage')?.identifier
                        || occData.results?.[0]?.media?.[0]?.identifier || '';
@@ -439,6 +510,24 @@ async function initMap() {
             const iconEl = row.li.querySelector('.obs-count svg');
             if (iconEl) iconEl.outerHTML = getIconSvg('globe');
             if (count === 0) row.li.classList.add('no-observations');
+
+            row.resolvedNames = vnNames;
+            if (vnNames.length > 0) {
+              row.primaryName = vnNames[0].name;
+              const commonEl = row.li.querySelector('.common');
+              if (commonEl) {
+                const needsTag = vnNames[0].lang !== userLanguages[0];
+                commonEl.innerHTML = needsTag
+                  ? `<span class="lang-tag">${vnNames[0].lang.toUpperCase()}</span> ${vnNames[0].name}`
+                  : vnNames[0].name;
+              }
+            }
+            if (vnNames.length > 1 && row.vnEl) {
+              row.vnEl.innerHTML = vnNames.slice(1).map(n =>
+                `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`
+              ).join('<span class="vn-sep"> · </span>');
+            }
+
             enriched.push({ row, count });
           } catch {
             row.countEl.textContent = 'No observations';
@@ -769,10 +858,23 @@ async function initMap() {
                 <div class="vector-popup">
                   ${imgHtml}
                   <div class="title">${occ.scientificName || 'Unknown Species'}</div>
+                  <div class="vernacular-popup"></div>
                   <div class="meta">${getIconSvg('calendar')} Observed: ${occ.year || 'Unknown'}</div>
                 </div>
               `;
               marker.bindPopup(popupHtml);
+              const popupTaxonKey = occ.speciesKey || occ.taxonKey;
+              if (popupTaxonKey) {
+                marker.on('popupopen', async () => {
+                  const names = await resolveVernacularNames(popupTaxonKey);
+                  const el = marker.getPopup()?.getElement()?.querySelector('.vernacular-popup');
+                  if (el && names.length > 0) {
+                    el.innerHTML = names.map(n =>
+                      `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`
+                    ).join(' · ');
+                  }
+                });
+              }
               
               vectorMarkers.push({ cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker: marker });
             });
@@ -981,6 +1083,96 @@ async function initMap() {
       });
     });
 
+    // Language Settings UI
+    const langChipsContainer = document.getElementById('lang-chips');
+    const langSearchInput = document.getElementById('lang-search') as HTMLInputElement;
+    const langDropdown = document.getElementById('lang-dropdown') as HTMLElement;
+
+    const onLanguagesChanged = () => {
+      renderHistory();
+      if (currentTaxonKey) {
+        const match = currentHistory.find(h => h.key === currentTaxonKey);
+        if (match) {
+          const name = getPrimaryName(match);
+          gbifSearch.value = name;
+          updateFilterLabel(name);
+        }
+      }
+    };
+
+    const saveLanguages = () => {
+      localStorage.setItem(STORAGE_KEY_LANGS, JSON.stringify(userLanguages));
+      syncStateToURL();
+      onLanguagesChanged();
+    };
+
+    const renderLanguageChips = () => {
+      if (!langChipsContainer) return;
+      langChipsContainer.innerHTML = '';
+      userLanguages.forEach((code, idx) => {
+        const info = langLookup1[code];
+        if (!info) return;
+        const chip = document.createElement('div');
+        chip.className = 'language-chip';
+        const nativeName = info.nativeName.split(',')[0].trim();
+        let btns = '';
+        if (idx > 0)
+          btns += `<button class="lang-chip-move" data-dir="up" title="Move up">${getIconSvg('chevron-up')}</button>`;
+        if (idx < userLanguages.length - 1)
+          btns += `<button class="lang-chip-move" data-dir="down" title="Move down">${getIconSvg('chevron-down')}</button>`;
+        btns += `<button class="lang-chip-remove" title="Remove">${getIconSvg('x')}</button>`;
+        chip.innerHTML = `
+          <span class="lang-chip-code">${code.toUpperCase()}</span>
+          <span class="lang-chip-name">${nativeName}</span>
+          <span class="lang-chip-actions">${btns}</span>
+        `;
+        chip.querySelector('[data-dir="up"]')?.addEventListener('click', () => {
+          [userLanguages[idx - 1], userLanguages[idx]] = [userLanguages[idx], userLanguages[idx - 1]];
+          saveLanguages(); renderLanguageChips();
+        });
+        chip.querySelector('[data-dir="down"]')?.addEventListener('click', () => {
+          [userLanguages[idx], userLanguages[idx + 1]] = [userLanguages[idx + 1], userLanguages[idx]];
+          saveLanguages(); renderLanguageChips();
+        });
+        chip.querySelector('.lang-chip-remove')?.addEventListener('click', () => {
+          userLanguages.splice(idx, 1);
+          saveLanguages(); renderLanguageChips();
+        });
+        langChipsContainer.appendChild(chip);
+      });
+    };
+
+    if (langSearchInput && langDropdown) {
+      langSearchInput.addEventListener('input', () => {
+        const q = langSearchInput.value.trim().toLowerCase();
+        langDropdown.innerHTML = '';
+        if (q.length < 1) { langDropdown.style.display = 'none'; return; }
+        const matches = codes.filter(c =>
+          !userLanguages.includes(c.iso639_1) &&
+          (c.name.toLowerCase().includes(q) || c.nativeName.toLowerCase().includes(q) || c.iso639_1 === q)
+        ).slice(0, 8);
+        if (matches.length === 0) { langDropdown.style.display = 'none'; return; }
+        langDropdown.style.display = 'block';
+        matches.forEach(c => {
+          const li = document.createElement('li');
+          const native = c.nativeName.split(',')[0].trim();
+          li.innerHTML = `<span class="lang-tag">${c.iso639_1.toUpperCase()}</span> ${c.name} <span class="lang-native">${native}</span>`;
+          li.addEventListener('click', () => {
+            userLanguages.push(c.iso639_1);
+            saveLanguages(); renderLanguageChips();
+            langSearchInput.value = '';
+            langDropdown.style.display = 'none';
+          });
+          langDropdown.appendChild(li);
+        });
+      });
+      langSearchInput.addEventListener('blur', () => {
+        setTimeout(() => { langDropdown.style.display = 'none'; }, 200);
+      });
+    }
+
+    renderLanguageChips();
+
     const checkGbifHealth = async () => {
       const dot = gbifHeader?.querySelector('.status-dot');
       try {
@@ -992,10 +1184,11 @@ async function initMap() {
     
     // 6. Final Initialization
     renderHistory();
-    if (currentTaxonKey && gbifSearch.value) updateFilterLabel(gbifSearch.value);
-    else if (currentTaxonKey) {
+    if (currentTaxonKey) {
       const match = currentHistory.find(h => h.key === currentTaxonKey);
-      updateFilterLabel(match ? match.name : `Taxon ${currentTaxonKey}`);
+      const label = match ? getPrimaryName(match) : (gbifSearch.value || `Taxon ${currentTaxonKey}`);
+      gbifSearch.value = label;
+      updateFilterLabel(label);
     }
     checkGbifHealth();
     validateAllPalettes(currentShape);
