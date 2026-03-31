@@ -512,6 +512,7 @@ async function initMap() {
               img.className = 'search-avatar';
               img.alt = row.s.canonicalName || '';
               img.loading = 'lazy';
+              img.referrerPolicy = 'no-referrer';
               img.onerror = () => { img.outerHTML = `<div class="search-avatar">${getIconSvg('leaf')}</div>`; };
               row.avatarEl.replaceWith(img);
             }
@@ -1041,7 +1042,7 @@ async function initMap() {
           let keepFetching = true;
           let totalCount = 0;
           const limit = 300;
-          const MAX_POINTS = 3000;
+          const MAX_POINTS = 10000;
           const progressBar = searchAreaBtn.querySelector('.search-progress-bar') as HTMLElement;
           if (progressBar) progressBar.style.width = '2%';
           searchAreaBtn.classList.add('loading');
@@ -1064,7 +1065,7 @@ async function initMap() {
                 taxaCssClass: taxaInfo.cssClass
               } as any).addTo(vectorLayer);
               
-              const imgHtml = hasImage ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy" onerror="this.remove()">` : '';
+              const imgHtml = hasImage ? `<img src="${media}" alt="${occ.scientificName}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
               const popupHtml = `
                 <div class="vector-popup">
                   ${imgHtml}

@@ -1180,9 +1180,25 @@ body {
 }
 
 .search-area-btn:hover { background: var(--accent-color); transform: scale(1.05); }
-.clear-points-btn { background: rgba(239, 68, 68, 0.9); font-size: 0.8rem; padding: 6px 16px; border-color: rgba(2ef,68,68,0.5); }
-.clear-points-btn:hover { background: #dc2626; transform: scale(1.05); }
-.clear-points-btn.hidden { display: none; }
+.clear-points-fab {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background 0.2s, transform 0.2s, opacity 0.25s, box-shadow 0.2s;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+.clear-points-fab svg { width: 20px; height: 20px; }
+.clear-points-fab:hover { background: #dc2626; transform: scale(1.1); box-shadow: 0 4px 16px rgba(239, 68, 68, 0.5); }
+.clear-points-fab.hidden { opacity: 0; pointer-events: none; transform: scale(0.4); }
 
 .taxa-marker {
   position: relative;
