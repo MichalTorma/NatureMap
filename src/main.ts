@@ -74,6 +74,9 @@ async function initMap() {
     const savedZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
     
     // Core App State
+    const STORAGE_KEY_BASE = 'mymap_base_layer';
+    const defaultBaseLayer = config.layers.find(l => l.active)?.id || config.layers[0]?.id || 'osm';
+    let currentBaseLayer = urlParams.get('base') || localStorage.getItem(STORAGE_KEY_BASE) || defaultBaseLayer;
     let gbifLayer: L.TileLayer | null = null;
     let currentTaxonKey: number | null = urlParams.has('taxon') ? parseInt(urlParams.get('taxon')!) : null;
     let currentShape = urlParams.get('shape') || 'hex';
@@ -118,6 +121,7 @@ async function initMap() {
       p.set('lat', center.lat.toFixed(4));
       p.set('lng', center.lng.toFixed(4));
       p.set('z', map.getZoom().toString());
+      p.set('base', currentBaseLayer);
       if (currentTaxonKey) p.set('taxon', currentTaxonKey.toString());
       p.set('shape', currentShape);
       p.set('palette', currentPalette);
@@ -151,11 +155,12 @@ async function initMap() {
         ? L.tileLayer.wms(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous', zIndex: 0 })
         : L.tileLayer(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous', zIndex: 0 });
       baseLayers[layerSpec.id] = leafletLayer;
-      if (layerSpec.active) leafletLayer.addTo(map);
+      const isActive = layerSpec.id === currentBaseLayer;
+      if (isActive) leafletLayer.addTo(map);
 
       if (layerContainer) {
         const btn = document.createElement('button');
-        btn.className = `layer-btn ${layerSpec.active ? 'active' : ''}`;
+        btn.className = `layer-btn ${isActive ? 'active' : ''}`;
         btn.setAttribute('data-layer', layerSpec.id);
         btn.innerHTML = `<div class="status-dot"></div><i data-lucide="${layerSpec.icon}"></i><span>${layerSpec.label}</span>`;
         layerContainer.appendChild(btn);
@@ -164,6 +169,9 @@ async function initMap() {
           leafletLayer.addTo(map);
           document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
+          currentBaseLayer = layerSpec.id;
+          localStorage.setItem(STORAGE_KEY_BASE, currentBaseLayer);
+          syncStateToURL();
         });
       }
     });
@@ -1497,6 +1505,31 @@ async function initMap() {
           localStorage.setItem(WELCOME_KEY, '1');
         });
       }
+    }
+
+    // Reset All Settings
+    const ALL_STORAGE_KEYS = [STORAGE_KEY_CENTER, STORAGE_KEY_ZOOM, STORAGE_KEY_LANGS, STORAGE_KEY_BASE, 'gbif_history', WELCOME_KEY];
+    const resetBtn = document.getElementById('reset-all-btn');
+    if (resetBtn) {
+      let confirmPending = false;
+      let confirmTimer: any;
+      resetBtn.addEventListener('click', () => {
+        if (!confirmPending) {
+          confirmPending = true;
+          resetBtn.classList.add('confirming');
+          const label = resetBtn.querySelector('span');
+          if (label) label.textContent = 'Tap again to confirm';
+          confirmTimer = setTimeout(() => {
+            confirmPending = false;
+            resetBtn.classList.remove('confirming');
+            if (label) label.textContent = 'Reset All Settings';
+          }, 3000);
+          return;
+        }
+        clearTimeout(confirmTimer);
+        ALL_STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
+        window.location.href = window.location.pathname;
+      });
     }
 
   } catch (error) {
