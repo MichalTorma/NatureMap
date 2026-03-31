@@ -32,6 +32,21 @@ for (const [key, value] of Object.entries(LucideIcons)) {
   }
 }
 
+const ICON_CACHE: Record<string, string> = {};
+const getIconSvg = (name: string): string => {
+  if (ICON_CACHE[name]) return ICON_CACHE[name];
+  const temp = document.createElement('div');
+  temp.innerHTML = `<i data-lucide="${name}"></i>`;
+  (LucideIcons as any).createIcons({
+    icons: iconsObject,
+    root: temp
+  });
+  const svg = temp.innerHTML;
+  ICON_CACHE[name] = svg;
+  return svg;
+};
+
+
 async function initMap() {
   try {
     const response = await fetch('/config.json');
@@ -281,23 +296,30 @@ async function initMap() {
       if (paletteStatusTag) { paletteStatusTag.textContent = 'Verified'; paletteStatusTag.className = 'val-tag status-tag verified'; }
     };
 
+    const tilePixelRatio = Math.min(4, Math.ceil(window.devicePixelRatio || 1));
+
     const updateGbifLayer = () => {
       if (gbifLayer) map.removeLayer(gbifLayer);
       const styleParam = resolveGbifStyle(currentPalette, currentShape);
       const yearParam = currentYear === 'ALL' ? '' : `&year=1900,${currentYear}`;
       let originParam = '';
-      if (!currentOrigins.includes('ALL')) originParam = `&basisOfRecord=${currentOrigins.join(',')}`;
+      if (!currentOrigins.includes('ALL')) originParam = currentOrigins.map(o => `&basisOfRecord=${o}`).join('');
       const taxonParam = currentTaxonKey ? `&taxonKey=${currentTaxonKey}` : '';
       
-      const url = `https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?srs=EPSG:3857&style=${styleParam}${taxonParam}${yearParam}${originParam}`;
+      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@${tilePixelRatio}x.png?srs=EPSG:3857&style=${styleParam}${taxonParam}${yearParam}${originParam}`;
       
-      const maxNative = currentScaleMode === 'geographic' && (currentShape === 'hex' || currentShape === 'square') ? 14 : ((currentShape === 'hex' || currentShape === 'square') ? 9 : 14);
+      const isBinned = currentShape === 'hex' || currentShape === 'square';
+      const maxNative = isBinned
+        ? (currentScaleMode === 'geographic' ? 15 : 11)
+        : 16;
 
       gbifLayer = new (GbifLayerClass as any)(url, { 
         opacity: currentOpacity, 
         attribution: '&copy; GBIF', 
         crossOrigin: 'anonymous',
         zIndex: 10,
+        tileSize: 512,
+        zoomOffset: -1,
         maxNativeZoom: maxNative,
         gbifShape: currentShape,
         gbifDensity: currentDensity,
@@ -336,7 +358,7 @@ async function initMap() {
             
             const avatarHtml = data.image 
               ? `<img src="${data.image}" class="search-avatar" alt="${s.canonicalName}" loading="lazy">`
-              : `<div class="search-avatar"><i data-lucide="leaf"></i></div>`;
+              : `<div class="search-avatar">${getIconSvg('leaf')}</div>`;
               
             const rankHtml = s.rank ? `<span class="scientific-rank">${s.rank}</span>` : '';
             const nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
@@ -349,10 +371,11 @@ async function initMap() {
                 <span class="scientific">${s.scientificName}</span>
               </div>
               <div class="obs-count">
-                <i data-lucide="globe"></i>
+                ${getIconSvg('globe')}
                 ${data.count.toLocaleString()} worldwide observations
               </div>
             `;
+
             
             li.addEventListener('click', () => {
               currentTaxonKey = s.key;
@@ -363,7 +386,6 @@ async function initMap() {
             });
             gbifResults.appendChild(li);
           });
-          LucideIcons.createIcons({ icons: iconsObject, root: gbifResults });
         } else {
             gbifResults.style.display = 'none';
         }
@@ -565,7 +587,7 @@ async function initMap() {
       return {
         icon: L.divIcon({
           className: 'custom-taxa-icon',
-          html: `<div class="taxa-marker ${cssClass}"><i data-lucide="${iconName}"></i></div>`,
+          html: `<div class="taxa-marker ${cssClass}">${getIconSvg(iconName)}</div>`,
           iconSize: [38, 38],
           iconAnchor: [19, 19],
           popupAnchor: [0, -19]
@@ -574,6 +596,7 @@ async function initMap() {
         label,
         iconName
       };
+
     };
 
     map.on('zoomend', () => {
@@ -588,9 +611,12 @@ async function initMap() {
     if (searchAreaBtn) {
       searchAreaBtn.addEventListener('click', async () => {
         const bounds = map.getBounds();
-        const icon = searchAreaBtn.querySelector('i');
-        if (icon) icon.setAttribute('data-lucide', 'loader-2');
-        LucideIcons.createIcons({ icons: iconsObject, root: searchAreaBtn });
+        const iconContainer = searchAreaBtn.querySelector('i')?.parentElement;
+        
+        if (iconContainer) {
+          const iconEl = searchAreaBtn.querySelector('i');
+          if (iconEl) iconEl.outerHTML = getIconSvg('loader-2');
+        }
         
         if (gbifLayer) map.removeLayer(gbifLayer); // Hide raster heat while viewing vectors
 
@@ -633,10 +659,10 @@ async function initMap() {
                 <div class="vector-popup">
                   ${imgHtml}
                   <div class="title">${occ.scientificName || 'Unknown Species'}</div>
-                  <div class="meta"><i data-lucide="calendar"></i> Observed: ${occ.year || 'Unknown'}</div>
+                  <div class="meta">${getIconSvg('calendar')} Observed: ${occ.year || 'Unknown'}</div>
                 </div>
               `;
-              marker.bindPopup(popupHtml).on('popupopen', () => LucideIcons.createIcons({ icons: iconsObject }));
+              marker.bindPopup(popupHtml);
               
               vectorMarkers.push({ cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker: marker });
             });
@@ -653,7 +679,6 @@ async function initMap() {
             }
           }
           
-          LucideIcons.createIcons({ icons: iconsObject, root: vectorLayer.getPane() });
           if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
           
           if (progressBar) {
@@ -676,7 +701,7 @@ async function initMap() {
             if (totalCount > MAX_POINTS) {
                const warning = document.createElement('div');
                warning.className = 'legend-warning';
-               warning.innerHTML = `<i data-lucide="alert-triangle"></i> Showing ${MAX_POINTS.toLocaleString()} of ${totalCount.toLocaleString()} points`;
+               warning.innerHTML = `${getIconSvg('alert-triangle')} Showing ${MAX_POINTS.toLocaleString()} of ${totalCount.toLocaleString()} points`;
                vectorLegend.appendChild(warning);
             }
 
@@ -684,7 +709,7 @@ async function initMap() {
                const btn = document.createElement('div');
                btn.className = `legend-item`;
                btn.innerHTML = `
-                 <div class="legend-icon-badge taxa-marker ${cClass}"><i data-lucide="${info.iconUrl}"></i></div>
+                 <div class="legend-icon-badge taxa-marker ${cClass}">${getIconSvg(info.iconUrl)}</div>
                  <span class="legend-label">${info.label}</span>
                  <span class="legend-count">${info.count}</span>
                `;
@@ -701,15 +726,17 @@ async function initMap() {
                });
                vectorLegend.appendChild(btn);
             });
-            LucideIcons.createIcons({ icons: iconsObject, root: vectorLegend });
           }
+
 
         } catch (e) {
 
           console.error('Vector Search Error:', e);
         } finally {
-          if (icon) icon.setAttribute('data-lucide', 'search');
-          LucideIcons.createIcons({ icons: iconsObject, root: searchAreaBtn });
+          const loaderIcon = searchAreaBtn.querySelector('svg[data-lucide="loader-2"]');
+          if (loaderIcon) {
+            loaderIcon.outerHTML = getIconSvg('search');
+          }
         }
       });
     }
