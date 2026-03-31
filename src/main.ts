@@ -24,7 +24,6 @@ interface AppConfig {
   layers: LayerConfig[];
   gbif: {
     defaultStyle: string;
-    defaultTaxon: number;
     availableStyles: { id: string; label: string; params: string }[];
   };
 }
@@ -51,6 +50,16 @@ const getIconSvg = (name: string): string => {
 };
 
 
+let errorToastTimer: any;
+const showErrorToast = (message: string) => {
+  const toast = document.getElementById('error-toast');
+  if (!toast) return;
+  toast.innerHTML = `<div class="error-toast-inner">${getIconSvg('alert-circle')}<span>${message}</span></div>`;
+  toast.classList.add('visible');
+  clearTimeout(errorToastTimer);
+  errorToastTimer = setTimeout(() => toast.classList.remove('visible'), 5000);
+};
+
 async function initMap() {
   try {
     const response = await fetch('/config.json');
@@ -73,7 +82,7 @@ async function initMap() {
     let currentScaleMode = urlParams.get('scale') || 'static';
     let currentOpacity = urlParams.has('opacity') ? parseFloat(urlParams.get('opacity')!) : 0.8;
     let currentYear: number | 'ALL' = urlParams.has('year') ? (urlParams.get('year') === 'ALL' ? 'ALL' : parseInt(urlParams.get('year')!)) : 'ALL';
-    let currentOrigins: string[] = urlParams.has('origins') ? urlParams.get('origins')!.split(',') : ['HUMAN_OBSERVATION', 'ALL']; 
+    let currentOrigins: string[] = urlParams.has('origins') ? urlParams.get('origins')!.split(',') : ['ALL']; 
     let gbifEnabled = true;
     let isPlaying = false;
     let playInterval: any;
@@ -231,7 +240,6 @@ async function initMap() {
     const opacityValueTag = document.getElementById('opacity-value');
     const historyShelf = document.getElementById('gbif-history');
     const styleTester = document.getElementById('style-tester') as HTMLCanvasElement;
-    const paletteStatusTag = document.getElementById('palette-status');
 
     const resolveGbifStyle = (palette: string, shape: string): string => {
       // 100% Strictly Typed GBIF Map Style Resolutions.
@@ -369,31 +377,38 @@ async function initMap() {
     };
 
     const validateAllPalettes = async (shape: string) => {
-      if (paletteStatusTag) { paletteStatusTag.textContent = 'Verifying...'; paletteStatusTag.className = 'val-tag status-tag testing'; }
       const tests = Array.from(paletteBtns).map(async (btn) => {
         const palette = btn.getAttribute('data-palette') || 'classic';
         btn.classList.add('testing');
         btn.classList.remove('verified', 'unsupported');
         const isValid = await checkStyleCapability(shape, palette);
         btn.classList.remove('testing');
-        if (isValid) btn.classList.add('verified'); else btn.classList.add('unsupported');
+        if (isValid) {
+          btn.classList.add('verified');
+          btn.removeAttribute('data-unavailable');
+        } else {
+          btn.classList.add('unsupported');
+          btn.setAttribute('title', 'Not available for this shape');
+        }
       });
       await Promise.all(tests);
-      if (paletteStatusTag) { paletteStatusTag.textContent = 'Verified'; paletteStatusTag.className = 'val-tag status-tag verified'; }
     };
 
     const tilePixelRatio = Math.min(4, Math.ceil(window.devicePixelRatio || 1));
 
-    const updateGbifLayer = () => {
-      if (gbifLayer) map.removeLayer(gbifLayer);
-      if (!gbifEnabled) return;
+    const buildGbifUrl = (): string => {
       const styleParam = resolveGbifStyle(currentPalette, currentShape);
       const yearParam = currentYear === 'ALL' ? '' : `&year=1900,${currentYear}`;
       let originParam = '';
       if (!currentOrigins.includes('ALL')) originParam = currentOrigins.map(o => `&basisOfRecord=${o}`).join('');
       const taxonParam = currentTaxonKey ? `&taxonKey=${currentTaxonKey}` : '';
-      
-      const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@${tilePixelRatio}x.png?srs=EPSG:3857&style=${styleParam}${taxonParam}${yearParam}${originParam}`;
+      return `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@${tilePixelRatio}x.png?srs=EPSG:3857&style=${styleParam}${taxonParam}${yearParam}${originParam}`;
+    };
+
+    const updateGbifLayer = () => {
+      if (gbifLayer) map.removeLayer(gbifLayer);
+      if (!gbifEnabled) return;
+      const url = buildGbifUrl();
       
       const isBinned = currentShape === 'hex' || currentShape === 'square';
       const maxNative = isBinned
@@ -413,6 +428,12 @@ async function initMap() {
         gbifGridMode: currentScaleMode,
         errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
       }).addTo(map);
+      syncStateToURL();
+    };
+
+    const updateGbifUrlOnly = () => {
+      if (!gbifLayer || !gbifEnabled) return;
+      (gbifLayer as any).setUrl(buildGbifUrl());
       syncStateToURL();
     };
 
@@ -492,15 +513,13 @@ async function initMap() {
           rows.push(rowData);
         });
 
-        const enriched: { row: typeof rows[0]; count: number }[] = [];
-        for (const row of rows) {
-          if (gen !== searchGeneration) return;
+        const enrichRow = async (row: typeof rows[0]): Promise<{ row: typeof rows[0]; count: number }> => {
           try {
             const [occData, vnNames] = await Promise.all([
               fetch(`https://api.gbif.org/v1/occurrence/search?taxonKey=${row.s.key}&limit=1`).then(r => r.json()),
               resolveVernacularNames(row.s.key)
             ]);
-            if (gen !== searchGeneration) return;
+            if (gen !== searchGeneration) return { row, count: 0 };
             const count = occData.count || 0;
             const image = occData.results?.[0]?.media?.find((m: any) => m.type === 'StillImage')?.identifier
                        || occData.results?.[0]?.media?.[0]?.identifier || '';
@@ -538,15 +557,17 @@ async function initMap() {
               ).join('<span class="vn-sep"> · </span>');
             }
 
-            enriched.push({ row, count });
+            return { row, count };
           } catch {
             row.countEl.textContent = 'No observations';
             const iconEl = row.li.querySelector('.obs-count svg');
             if (iconEl) iconEl.outerHTML = getIconSvg('globe');
             row.li.classList.add('no-observations');
-            enriched.push({ row, count: 0 });
+            return { row, count: 0 };
           }
-        }
+        };
+
+        const enriched = await Promise.all(rows.map(enrichRow));
 
         if (gen !== searchGeneration) return;
         const fragment = document.createDocumentFragment();
@@ -565,13 +586,39 @@ async function initMap() {
         gbifResults.appendChild(fragment);
       } catch (e) {
         console.error('Suggest API Error', e);
+        showErrorToast('Species search failed — check your connection and try again.');
       }
     };
 
+    let searchDebounceTimer: any;
     gbifSearch.addEventListener('input', () => {
       const query = gbifSearch.value.trim();
-      if (query.length < 3) { gbifResults.style.display = 'none'; return; }
-      setTimeout(() => fetchGbif(query), 600);
+      if (query.length < 2) { gbifResults.style.display = 'none'; return; }
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => fetchGbif(query), 300);
+    });
+
+    gbifSearch.addEventListener('keydown', (e) => {
+      const items = gbifResults.querySelectorAll('li');
+      if (items.length === 0 || gbifResults.style.display === 'none') return;
+      const active = gbifResults.querySelector('li.kb-focus');
+      let idx = Array.from(items).indexOf(active as HTMLLIElement);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        active?.classList.remove('kb-focus');
+        idx = idx < items.length - 1 ? idx + 1 : 0;
+        items[idx].classList.add('kb-focus');
+        items[idx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        active?.classList.remove('kb-focus');
+        idx = idx > 0 ? idx - 1 : items.length - 1;
+        items[idx].classList.add('kb-focus');
+        items[idx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && active) {
+        e.preventDefault();
+        (active as HTMLElement).click();
+      }
     });
 
     shapeBtns.forEach(btn => {
@@ -617,11 +664,6 @@ async function initMap() {
         scaleBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentScaleMode = btn.getAttribute('data-mode') || 'static';
-        // When dynamic geometry is active, clear out testing tag to avoid confusion
-        if (currentScaleMode === 'geographic' && paletteStatusTag) {
-            paletteStatusTag.textContent = 'Geo Active';
-            paletteStatusTag.className = 'val-tag status-tag online';
-        }
         debouncedUpdateGbifLayer(100);
       });
     });
@@ -649,8 +691,9 @@ async function initMap() {
         
         if (isPlaying) {
           if (currentYear === 'ALL' || currentYear >= 2025) currentYear = 1900;
+          if (!gbifLayer) updateGbifLayer();
           playInterval = setInterval(() => {
-            if (currentYear !== 'ALL') currentYear += 2;
+            if (currentYear !== 'ALL') currentYear += 5;
             if (currentYear !== 'ALL' && currentYear > 2025) {
               currentYear = 'ALL'; 
               isPlaying = false; 
@@ -661,8 +704,8 @@ async function initMap() {
             }
             gbifYearInput.value = currentYear === 'ALL' ? "2025" : currentYear.toString();
             yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
-            updateGbifLayer();
-          }, 1200);
+            updateGbifUrlOnly();
+          }, 800);
         } else clearInterval(playInterval);
       });
     }
@@ -1156,8 +1199,8 @@ async function initMap() {
 
 
         } catch (e) {
-
           console.error('Vector Search Error:', e);
+          showErrorToast('Area search failed — check your connection and try again.');
         } finally {
           const loaderIcon = searchAreaBtn.querySelector('svg[data-lucide="loader-2"]');
           if (loaderIcon) {
@@ -1174,7 +1217,7 @@ async function initMap() {
         activeFilters.clear();
         hideLegendFab();
         clearPointsBtn.classList.add('hidden');
-        if (gbifLayer) map.addLayer(gbifLayer);
+        if (gbifEnabled && gbifLayer) map.addLayer(gbifLayer);
       });
     }
 
@@ -1222,7 +1265,41 @@ async function initMap() {
       uiPanel?.classList.remove('open');
       settingsToggle?.classList.remove('active');
       panelOverlay?.classList.remove('active');
+      if (uiPanel) uiPanel.style.transform = '';
     };
+
+    // Swipe-to-dismiss for mobile bottom sheet
+    const dragHandle = uiPanel?.querySelector('.drag-handle');
+    if (dragHandle && uiPanel) {
+      let startY = 0;
+      let currentDragY = 0;
+      let isDragging = false;
+      dragHandle.addEventListener('touchstart', (e) => {
+        const te = e as TouchEvent;
+        startY = te.touches[0].clientY;
+        isDragging = true;
+        uiPanel.style.transition = 'none';
+      });
+      dragHandle.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const te = e as TouchEvent;
+        currentDragY = Math.max(0, te.touches[0].clientY - startY);
+        uiPanel.style.transform = `translateY(${currentDragY}px)`;
+      });
+      const endDrag = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        uiPanel.style.transition = '';
+        if (currentDragY > 100) {
+          closePanel();
+        } else {
+          uiPanel.style.transform = '';
+        }
+        currentDragY = 0;
+      };
+      dragHandle.addEventListener('touchend', endDrag);
+      dragHandle.addEventListener('touchcancel', endDrag);
+    }
 
     settingsToggle?.addEventListener('click', () => {
       if (uiPanel?.classList.contains('open')) closePanel();
@@ -1407,8 +1484,24 @@ async function initMap() {
     updateGbifLayer();
     LucideIcons.createIcons({ icons: iconsObject });
 
+    // Welcome card (first visit only)
+    const WELCOME_KEY = 'mymap_welcomed';
+    const welcomeCard = document.getElementById('welcome-card');
+    const welcomeDismiss = document.getElementById('welcome-dismiss');
+    if (welcomeCard) {
+      if (localStorage.getItem(WELCOME_KEY)) {
+        welcomeCard.classList.add('hidden');
+      } else {
+        welcomeDismiss?.addEventListener('click', () => {
+          welcomeCard.classList.add('hidden');
+          localStorage.setItem(WELCOME_KEY, '1');
+        });
+      }
+    }
+
   } catch (error) {
     console.error('Error initializing map:', error);
+    showErrorToast('Failed to load app configuration. Please refresh the page.');
   }
 }
 

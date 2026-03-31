@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>mymap</title>
+    <title>MyMap — Explore Global Biodiversity</title>
   </head>
   <body>
     <div id="map"></div>
@@ -28,8 +28,8 @@
       </div>
       <div class="search-panel-body">
         <div class="search-container">
-          <input type="text" id="gbif-search" placeholder="Search species, genus, family..." autocomplete="off">
-          <ul id="gbif-results" class="search-results"></ul>
+          <input type="text" id="gbif-search" placeholder="Search species, genus, family..." autocomplete="off" aria-label="Search species by name">
+          <ul id="gbif-results" class="search-results" role="listbox" aria-label="Search results"></ul>
         </div>
         <div id="gbif-history" class="history-shelf"></div>
       </div>
@@ -117,16 +117,16 @@
             <div class="control-group">
               <span class="label">Visualization Shape</span>
               <div class="picker-grid" id="gbif-shape-picker">
-                <button class="picker-btn active" data-shape="hex" title="Hexagonal Grid">
+                <button class="picker-btn active" data-shape="hex" title="Hexagonal Grid" aria-label="Hexagonal grid visualization">
                   <i data-lucide="hexagon"></i>
                 </button>
-                <button class="picker-btn" data-shape="square" title="Square Grid">
+                <button class="picker-btn" data-shape="square" title="Square Grid" aria-label="Square grid visualization">
                   <i data-lucide="layout-grid"></i>
                 </button>
-                <button class="picker-btn" data-shape="point" title="Individual Records">
+                <button class="picker-btn" data-shape="point" title="Individual Records" aria-label="Individual point records">
                   <i data-lucide="map-pin"></i>
                 </button>
-                <button class="picker-btn" data-shape="heatmap" title="Density Heatmap">
+                <button class="picker-btn" data-shape="heatmap" title="Density Heatmap" aria-label="Density heatmap visualization">
                   <i data-lucide="wind"></i>
                 </button>
               </div>
@@ -135,14 +135,13 @@
             <div class="control-group">
               <div class="label-row">
                 <span class="label">Color Palette</span>
-                <span id="palette-status" class="val-tag status-tag">Ready</span>
               </div>
               <div class="palette-picker" id="gbif-palette-picker">
-                <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal"><div class="badge"></div></button>
+                <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic" aria-label="Classic palette (yellow to red)"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest" aria-label="Forest palette (light to dark green)"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean" aria-label="Ocean palette (light to dark blue)"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire" aria-label="Fire palette (orange to red)"><div class="badge"></div></button>
+                <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal" aria-label="Royal palette (light to dark purple)"><div class="badge"></div></button>
               </div>
             </div>
 
@@ -166,14 +165,14 @@
                     <span class="label" title="Base number of bins per map tile">Base Resolution</span>
                     <span id="density-value" class="val-tag">45 Bins</span>
                   </div>
-                  <input type="range" id="gbif-density" min="10" max="150" value="45" step="1">
+                  <input type="range" id="gbif-density" min="10" max="150" value="45" step="1" aria-label="Base resolution bins">
                 </div>
                 <div class="control-group">
                   <div class="label-row">
                     <span class="label">Opacity</span>
                     <span id="opacity-value" class="val-tag">80%</span>
                   </div>
-                  <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1">
+                  <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
                 </div>
               </div>
             </div>
@@ -182,7 +181,7 @@
               <span class="label" title="Cumulative Range">Timeline</span>
               <div class="timeline-control">
                 <button id="gbif-play" class="play-btn" title="Play Evolution"><i data-lucide="play"></i></button>
-                <input type="range" id="gbif-year" min="1900" max="2025" value="2025" step="1">
+                <input type="range" id="gbif-year" min="1900" max="2025" value="2025" step="1" aria-label="Timeline year range">
                 <span id="year-value">All Years</span>
               </div>
             </div>
@@ -190,7 +189,7 @@
             <div class="control-group">
               <span class="label">Origin</span>
               <div id="gbif-origin" class="button-toggle-group">
-                <button class="toggle-btn active" data-value="HUMAN_OBSERVATION">Human</button>
+                <button class="toggle-btn" data-value="HUMAN_OBSERVATION">Human</button>
                 <button class="toggle-btn" data-value="PRESERVED_SPECIMEN">Museum</button>
                 <button class="toggle-btn active" data-value="ALL">All</button>
               </div>
@@ -219,6 +218,21 @@
     </div>
     <div id="panel-overlay" class="panel-overlay"></div>
     <div id="geo-toast" class="geo-toast"></div>
+    <div id="error-toast" class="error-toast"></div>
+
+    <!-- First-visit welcome card -->
+    <div id="welcome-card" class="welcome-card">
+      <div class="welcome-card-inner">
+        <h2>Welcome to MyMap</h2>
+        <p>You're viewing live biodiversity data from <strong>GBIF</strong> — the Global Biodiversity Information Facility.</p>
+        <ul>
+          <li>Open the menu to <strong>search species</strong> and change map styles</li>
+          <li><strong>Zoom in</strong> to explore individual observation records</li>
+          <li><strong>Share</strong> any view via a deep link</li>
+        </ul>
+        <button id="welcome-dismiss" class="welcome-dismiss-btn">Get Started</button>
+      </div>
+    </div>
     <canvas id="style-tester" width="256" height="256" style="display: none;"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>

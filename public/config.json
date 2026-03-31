@@ -76,7 +76,6 @@
     }
   ],
   "gbif": {
-    "defaultTaxon": 2435099,
     "defaultStyle": "hex",
     "availableStyles": [
       { "id": "hex", "label": "Scientific Hexagons", "params": "bin=hex&hexPerTile=45&style=classic.poly" },
