@@ -157,7 +157,15 @@ async function initMap() {
     let userLanguages: string[] = urlParams.has('langs')
       ? urlParams.get('langs')!.split(',').filter(l => langLookup1[l])
       : JSON.parse(localStorage.getItem(STORAGE_KEY_LANGS) || 'null') || defaultLangs;
-    
+
+    let legendDisplayLang = userLanguages[0] || defaultLangs[0] || 'en';
+    let refreshTaxonomyLegendLang: (() => Promise<void>) | null = null;
+    const getLegendLangList = (): string[] => (userLanguages.length > 0 ? userLanguages : defaultLangs);
+    const syncLegendDisplayLang = () => {
+      const list = getLegendLangList();
+      if (!legendDisplayLang || !list.includes(legendDisplayLang)) legendDisplayLang = list[0] || 'en';
+    };
+
     const initialLat = urlParams.has('lat') ? parseFloat(urlParams.get('lat')!) : (savedCenter ? JSON.parse(savedCenter)[0] : config.mapOptions.center[0]);
     const initialLng = urlParams.has('lng') ? parseFloat(urlParams.get('lng')!) : (savedCenter ? JSON.parse(savedCenter)[1] : config.mapOptions.center[1]);
     const initialCenter: L.LatLngTuple = [initialLat, initialLng];
@@ -165,6 +173,63 @@ async function initMap() {
 
     // 2. Initialize Map
     const map = L.map('map', { center: initialCenter, zoom: initialZoom, layers: [] });
+
+    /* Pan / zoom so GBIF vector popup (incl. image) stays inside the map pane; extra right/bottom padding for FABs */
+    const vectorPopupMapPad = { l: 24, t: 76, r: 108, b: 44 };
+    let vectorPopupFitGeneration = 0;
+    const scheduleVectorPopupFit = (marker: L.Marker) => {
+      const gen = ++vectorPopupFitGeneration;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (gen !== vectorPopupFitGeneration) return;
+          fitVectorPopupInView(marker, gen);
+        });
+      });
+    };
+    const fitVectorPopupInView = (marker: L.Marker, gen: number) => {
+      const popup = marker.getPopup();
+      if (!popup?.isOpen() || gen !== vectorPopupFitGeneration) return;
+      const el = popup.getElement();
+      if (!el) return;
+      const mapEl = map.getContainer();
+      const mr = mapEl.getBoundingClientRect();
+      const p = vectorPopupMapPad;
+      const minZ = map.getMinZoom();
+      let passes = 0;
+      const maxPasses = 14;
+
+      const step = () => {
+        if (!popup.isOpen() || gen !== vectorPopupFitGeneration || passes++ > maxPasses) return;
+        popup.update();
+        const r = el.getBoundingClientRect();
+        const availW = mr.width - p.l - p.r;
+        const availH = mr.height - p.t - p.b;
+        const tooBig = r.height > availH + 1 || r.width > availW + 1;
+
+        if (tooBig && map.getZoom() > minZ) {
+          map.setZoom(map.getZoom() - 1, { animate: true });
+          map.once('zoomend', () => {
+            map.panTo(marker.getLatLng(), { animate: false });
+            requestAnimationFrame(step);
+          });
+          return;
+        }
+
+        let dx = 0;
+        let dy = 0;
+        if (r.left < mr.left + p.l) dx += (mr.left + p.l) - r.left;
+        if (r.right > mr.right - p.r) dx += (mr.right - p.r) - r.right;
+        if (r.top < mr.top + p.t) dy += (mr.top + p.t) - r.top;
+        if (r.bottom > mr.bottom - p.b) dy += (mr.bottom - p.b) - r.bottom;
+
+        if (dx !== 0 || dy !== 0) {
+          map.panBy(L.point(dx, dy), { animate: true, duration: 0.28 });
+          map.once('moveend', () => requestAnimationFrame(step));
+          return;
+        }
+      };
+      step();
+    };
 
     const syncStateToURL = () => {
       const p = new URLSearchParams();
@@ -561,6 +626,78 @@ async function initMap() {
         if (match) { result.push(match); seen.add(lc); }
       }
       return result;
+    };
+
+    const prefetchTaxonVernaculars = async (taxonKeys: number[]) => {
+      const uniq = [...new Set(taxonKeys.filter(k => k > 0))];
+      await Promise.all(uniq.map(k => resolveVernacularNames(k)));
+    };
+
+    const createTaxonNameWrap = (scientificName: string, taxonKey?: number): HTMLSpanElement => {
+      const wrap = document.createElement('span');
+      wrap.className = 'tree-name-wrap';
+      if (taxonKey && taxonKey > 0) wrap.dataset.taxonKey = String(taxonKey);
+      wrap.dataset.scientific = scientificName;
+      const primary = document.createElement('span');
+      primary.className = 'tree-name-primary';
+      primary.textContent = scientificName;
+      const sci = document.createElement('span');
+      sci.className = 'tree-name-sci';
+      sci.textContent = scientificName;
+      const allEl = document.createElement('span');
+      allEl.className = 'tree-vn-all';
+      wrap.appendChild(primary);
+      wrap.appendChild(sci);
+      wrap.appendChild(allEl);
+      return wrap;
+    };
+
+    const updateTaxonNameWrap = (wrap: HTMLElement) => {
+      const keyStr = wrap.dataset.taxonKey;
+      const sci = wrap.dataset.scientific || '';
+      const primaryEl = wrap.querySelector('.tree-name-primary') as HTMLElement | null;
+      const sciEl = wrap.querySelector('.tree-name-sci') as HTMLElement | null;
+      const allEl = wrap.querySelector('.tree-vn-all') as HTMLElement | null;
+      if (!primaryEl || !sciEl) return;
+      if (!keyStr) {
+        primaryEl.textContent = sci;
+        sciEl.style.display = 'none';
+        if (allEl) { allEl.textContent = ''; allEl.style.display = 'none'; }
+        return;
+      }
+      const key = parseInt(keyStr, 10);
+      const all = vnCache.get(key) || [];
+      const pickLc = (lang: string) => all.find(n => n.lang === lang)?.name;
+      const activeName = pickLc(legendDisplayLang) || sci;
+      primaryEl.textContent = activeName;
+      if (activeName !== sci && sci) {
+        sciEl.textContent = sci;
+        sciEl.style.display = '';
+      } else {
+        sciEl.style.display = 'none';
+      }
+      const list = getLegendLangList();
+      if (allEl && list.length > 0) {
+        const parts: string[] = [];
+        for (const lc of list) {
+          const nm = pickLc(lc);
+          if (nm) parts.push(`${lc.toUpperCase()}\u00a0${nm}`);
+        }
+        if (parts.length > 0) {
+          allEl.textContent = parts.join(' · ');
+          allEl.style.display = list.length > 1 ? '' : 'none';
+        } else {
+          allEl.textContent = '';
+          allEl.style.display = 'none';
+        }
+      }
+    };
+
+    const applyLegendLanguageToBody = async (body: HTMLElement) => {
+      const wraps = [...body.querySelectorAll<HTMLElement>('.tree-name-wrap')];
+      const keys = wraps.map(w => parseInt(w.dataset.taxonKey || '', 10)).filter(k => !Number.isNaN(k) && k > 0);
+      await prefetchTaxonVernaculars(keys);
+      wraps.forEach(w => updateTaxonNameWrap(w));
     };
 
     // Dataset Name Resolver
@@ -1206,6 +1343,7 @@ async function initMap() {
     const hideLegendFab = () => {
       legendToggle?.classList.add('hidden');
       closeLegend();
+      refreshTaxonomyLegendLang = null;
     };
 
     legendToggle?.addEventListener('click', () => {
@@ -1214,12 +1352,29 @@ async function initMap() {
     });
     legendClose?.addEventListener('click', closeLegend);
 
+    interface TaxonomyBlock {
+      kingdom: string;
+      phylum: string;
+      class: string;
+      order: string;
+      family: string;
+      genus: string;
+      species: string;
+      kingdomKey?: number;
+      phylumKey?: number;
+      classKey?: number;
+      orderKey?: number;
+      familyKey?: number;
+      genusKey?: number;
+      speciesKey?: number;
+    }
+
     interface VectorMarkerEntry {
       cssClass: string;
       label: string;
       iconUrl: string;
       marker: L.Marker;
-      taxonomy: { kingdom: string; phylum: string; class: string; order: string; family: string; genus: string; species: string };
+      taxonomy: TaxonomyBlock;
     }
     let vectorMarkers: VectorMarkerEntry[] = [];
     let activeFilters: Set<string> = new Set();
@@ -1230,9 +1385,25 @@ async function initMap() {
       count: number;
       children: Map<string, TaxaNode>;
       markers: L.Marker[];
+      taxonKey?: number;
     }
 
     const RANKS = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species'] as const;
+
+    const rankToKeyField: Record<(typeof RANKS)[number], keyof TaxonomyBlock> = {
+      kingdom: 'kingdomKey',
+      phylum: 'phylumKey',
+      class: 'classKey',
+      order: 'orderKey',
+      family: 'familyKey',
+      genus: 'genusKey',
+      species: 'speciesKey'
+    };
+
+    const taxonKeyForRank = (t: TaxonomyBlock, rank: (typeof RANKS)[number]): number | undefined => {
+      const v = t[rankToKeyField[rank]];
+      return typeof v === 'number' && v > 0 ? v : undefined;
+    };
 
     const buildTaxaTree = (markers: VectorMarkerEntry[]): TaxaNode => {
       const root: TaxaNode = { name: 'Life', rank: 'root', count: 0, children: new Map(), markers: [] };
@@ -1243,9 +1414,14 @@ async function initMap() {
         for (const rank of RANKS) {
           const name = m.taxonomy[rank] || 'Unknown';
           if (!node.children.has(name)) {
-            node.children.set(name, { name, rank, count: 0, children: new Map(), markers: [] });
+            const tk = taxonKeyForRank(m.taxonomy, rank);
+            node.children.set(name, { name, rank, count: 0, children: new Map(), markers: [], taxonKey: tk });
           }
           const child = node.children.get(name)!;
+          if (!child.taxonKey) {
+            const tk = taxonKeyForRank(m.taxonomy, rank);
+            if (tk) child.taxonKey = tk;
+          }
           child.count++;
           child.markers.push(m.marker);
           node = child;
@@ -1411,11 +1587,21 @@ async function initMap() {
                   </div>
                 </div>
               `;
-              marker.bindPopup(popupHtml);
+              marker.bindPopup(popupHtml, { maxWidth: 300, autoPan: false });
               const popupTaxonKey = occ.speciesKey || occ.taxonKey;
               marker.on('popupopen', async () => {
                 const popupEl = marker.getPopup()?.getElement();
                 if (!popupEl) return;
+                if (hasImage) {
+                  const imgEl = popupEl.querySelector('img');
+                  if (imgEl) {
+                    if (imgEl.complete) scheduleVectorPopupFit(marker);
+                    else imgEl.addEventListener('load', () => {
+                      marker.getPopup()?.update();
+                      scheduleVectorPopupFit(marker);
+                    }, { once: true });
+                  } else scheduleVectorPopupFit(marker);
+                } else scheduleVectorPopupFit(marker);
                 if (popupTaxonKey) {
                   const el = popupEl.querySelector('.vernacular-popup');
                   if (el && !el.innerHTML.trim()) {
@@ -1438,6 +1624,8 @@ async function initMap() {
                     }
                   }
                 }
+                marker.getPopup()?.update();
+                scheduleVectorPopupFit(marker);
               });
               
               vectorMarkers.push({
@@ -1445,7 +1633,10 @@ async function initMap() {
                 taxonomy: {
                   kingdom: occ.kingdom || '', phylum: occ.phylum || '', class: occ.class || '',
                   order: occ.order || '', family: occ.family || '', genus: occ.genus || '',
-                  species: occ.species || occ.scientificName || ''
+                  species: occ.species || occ.scientificName || '',
+                  kingdomKey: occ.kingdomKey, phylumKey: occ.phylumKey, classKey: occ.classKey,
+                  orderKey: occ.orderKey, familyKey: occ.familyKey, genusKey: occ.genusKey,
+                  speciesKey: occ.speciesKey
                 }
               });
             });
@@ -1521,11 +1712,25 @@ async function initMap() {
               row.className = `tree-row${isLeaf ? ' tree-leaf' : ''}`;
               row.style.paddingLeft = `${8 + depth * 14}px`;
 
-              const chevron = isLeaf ? '' : `<span class="tree-chevron">${getIconSvg('chevron-right')}</span>`;
-              const rankTag = node.rank !== 'root' ? `<span class="tree-rank">${rankLabel(node.rank)}</span>` : '';
-              const nameClass = node.rank === 'species' ? 'tree-name tree-species-name' : 'tree-name';
-
-              row.innerHTML = `${chevron}${rankTag}<span class="${nameClass}">${node.name}</span><span class="legend-count">${node.count}</span>`;
+              if (!isLeaf) {
+                const ch = document.createElement('span');
+                ch.className = 'tree-chevron';
+                ch.innerHTML = getIconSvg('chevron-right');
+                row.appendChild(ch);
+              }
+              if (node.rank !== 'root') {
+                const rtag = document.createElement('span');
+                rtag.className = 'tree-rank';
+                rtag.textContent = rankLabel(node.rank);
+                row.appendChild(rtag);
+              }
+              const nameWrap = createTaxonNameWrap(node.name, node.taxonKey);
+              if (node.rank === 'species') nameWrap.classList.add('tree-species-name');
+              row.appendChild(nameWrap);
+              const cntEl = document.createElement('span');
+              cntEl.className = 'legend-count';
+              cntEl.textContent = String(node.count);
+              row.appendChild(cntEl);
 
               container.appendChild(row);
 
@@ -1613,9 +1818,9 @@ async function initMap() {
                     spRow.className = 'tree-species-row';
                     spRow.dataset.filterId = spId;
 
-                    const nameEl = document.createElement('span');
-                    nameEl.className = 'tree-species-item';
-                    nameEl.textContent = speciesName;
+                    const sk = vectorMarkers.find(vm => vm.marker === markers[0])?.taxonomy.speciesKey;
+                    const nameWrap = createTaxonNameWrap(speciesName, sk);
+                    nameWrap.classList.add('tree-species-item', 'tree-species-name');
 
                     const countEl = document.createElement('span');
                     countEl.className = 'legend-count';
@@ -1655,11 +1860,12 @@ async function initMap() {
 
                     btnGroup.appendChild(spEye);
                     btnGroup.appendChild(spFilter);
-                    spRow.appendChild(nameEl);
+                    spRow.appendChild(nameWrap);
                     spRow.appendChild(countEl);
                     spRow.appendChild(btnGroup);
                     speciesPanel.appendChild(spRow);
                   });
+                  void applyLegendLanguageToBody(speciesPanel);
                   speciesPanel.style.display = 'block';
                   row.classList.add('table-open');
                 } else {
@@ -1689,6 +1895,43 @@ async function initMap() {
             for (const child of sorted) {
               renderNode(child, vectorLegendBody, 0, 'root');
             }
+
+            const langBar = document.getElementById('legend-lang-bar');
+            syncLegendDisplayLang();
+            if (langBar) {
+              const renderLegendLangChips = () => {
+                langBar.innerHTML = '';
+                const list = getLegendLangList();
+                list.forEach(code => {
+                  const chip = document.createElement('button');
+                  chip.type = 'button';
+                  chip.className = 'legend-lang-chip' + (code === legendDisplayLang ? ' active' : '');
+                  chip.textContent = code.toUpperCase();
+                  const inf = langLookup1[code];
+                  chip.title = inf ? `${inf.name} — ${inf.nativeName.split(',')[0].trim()}` : code;
+                  chip.addEventListener('click', async () => {
+                    legendDisplayLang = code;
+                    renderLegendLangChips();
+                    await applyLegendLanguageToBody(vectorLegendBody);
+                  });
+                  langBar.appendChild(chip);
+                });
+                langBar.classList.toggle('single-lang', list.length <= 1);
+              };
+              renderLegendLangChips();
+              refreshTaxonomyLegendLang = async () => {
+                syncLegendDisplayLang();
+                renderLegendLangChips();
+                await applyLegendLanguageToBody(vectorLegendBody);
+              };
+            } else {
+              refreshTaxonomyLegendLang = async () => {
+                syncLegendDisplayLang();
+                await applyLegendLanguageToBody(vectorLegendBody);
+              };
+            }
+
+            await applyLegendLanguageToBody(vectorLegendBody);
 
             const speciesCount = new Set(vectorMarkers.map(m => m.taxonomy.species)).size;
             showLegendFab(speciesCount);
@@ -1771,6 +2014,8 @@ async function initMap() {
     const langDropdown = document.getElementById('lang-dropdown') as HTMLElement;
 
     const onLanguagesChanged = () => {
+      syncLegendDisplayLang();
+      void refreshTaxonomyLegendLang?.();
       renderHistory();
       if (currentTaxonKey) {
         const match = currentHistory.find(h => h.key === currentTaxonKey);

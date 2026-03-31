@@ -1205,6 +1205,38 @@ body {
 .legend-header .panel-close-btn { width: 26px; height: 26px; }
 .legend-header .panel-close-btn i { width: 14px; height: 14px; }
 
+.legend-lang-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+.legend-lang-bar.single-lang { opacity: 0.85; }
+.legend-lang-chip {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.legend-lang-chip:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+.legend-lang-chip.active {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(96, 165, 250, 0.5);
+  color: #93c5fd;
+}
+
 .legend-body {
   padding: 6px 8px;
   display: flex;
@@ -1261,14 +1293,41 @@ body {
   text-align: center;
 }
 
-.tree-name {
+.tree-name-wrap {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+}
+.tree-name-primary {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.tree-name-wrap.tree-species-name .tree-name-primary { font-style: italic; }
+.tree-name-sci {
+  font-size: 0.65rem;
+  color: rgba(148, 163, 184, 0.85);
+  font-style: italic;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tree-species-name { font-style: italic; }
+.tree-vn-all {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.38);
+  line-height: 1.25;
+  max-width: 100%;
+  white-space: normal;
+  display: none;
+}
+.legend-lang-bar.single-lang ~ .legend-body .tree-vn-all { display: none !important; }
 
 .tree-eye {
   background: none;
@@ -1342,16 +1401,11 @@ body {
 }
 .tree-species-row.tree-hidden { opacity: 0.35; }
 .tree-species-row.tree-selected { background: rgba(59, 130, 246, 0.15); outline: 1px solid rgba(96, 165, 250, 0.35); }
-.tree-species-item {
+.tree-species-item.tree-name-wrap {
   flex: 1;
   min-width: 0;
-  font-size: 0.74rem;
-  color: rgba(255, 255, 255, 0.85);
-  font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+.tree-species-row .tree-name-primary { font-size: 0.74rem; }
 .tree-species-row .legend-count { flex-shrink: 0; }
 .tree-species-actions {
   display: flex;
@@ -1372,7 +1426,7 @@ body {
 .tree-children.open { display: block; }
 
 .tree-leaf { cursor: default; }
-.tree-leaf .tree-name { font-weight: 600; }
+.tree-leaf .tree-name-primary { font-weight: 600; }
 
 .legend-count {
   font-size: 0.7rem;
