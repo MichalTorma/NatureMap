@@ -504,7 +504,13 @@ async function initMap() {
             const validImage = image && (image.startsWith('http://') || image.startsWith('https://'));
 
             if (validImage) {
-              row.avatarEl.outerHTML = `<img src="${image}" class="search-avatar" alt="${row.s.canonicalName}" loading="lazy" onerror="this.outerHTML='<div class=\\'search-avatar\\'>${getIconSvg('leaf')}</div>'">`;
+              const img = document.createElement('img');
+              img.src = image;
+              img.className = 'search-avatar';
+              img.alt = row.s.canonicalName || '';
+              img.loading = 'lazy';
+              img.onerror = () => { img.outerHTML = `<div class="search-avatar">${getIconSvg('leaf')}</div>`; };
+              row.avatarEl.replaceWith(img);
             }
             row.countEl.textContent = count > 0 ? `${count.toLocaleString()} observations` : 'No observations';
             const iconEl = row.li.querySelector('.obs-count svg');

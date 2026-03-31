@@ -1411,7 +1411,7 @@ body {
 
 .lang-dropdown {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 0;
   right: 0;
   background: rgba(15, 23, 42, 0.95);
@@ -1422,7 +1422,7 @@ body {
   max-height: 200px;
   overflow-y: auto;
   z-index: 3000;
-  margin-top: 4px;
+  margin-bottom: 4px;
   display: none;
 }
 
