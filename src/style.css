@@ -1105,11 +1105,50 @@ body {
   box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
 }
 .leaflet-popup-tip { background: rgba(15, 23, 42, 0.95) !important; }
-.vector-popup { text-align: center; font-family: 'Inter', sans-serif; min-width: 140px; }
+.vector-popup { text-align: center; font-family: 'Inter', sans-serif; min-width: 180px; max-width: 260px; }
 .vector-popup img { width: 100%; border-radius: 8px; margin-bottom: 8px; max-height: 180px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
-.vector-popup .title { font-weight: 700; font-size: 1.1rem; margin-bottom: 4px; color: #fff; }
-.vector-popup .meta { color: #94a3b8; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 4px; }
-.vector-popup .meta i { width: 12px; height: 12px; }
+.vector-popup .title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; color: #fff; }
+.vector-popup .vernacular-popup { margin-bottom: 6px; }
+.vector-popup .popup-details {
+  text-align: left;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.vector-popup .popup-detail {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  word-break: break-word;
+}
+.vector-popup .popup-detail svg { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.6; }
+.vector-popup .popup-links {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.vector-popup .popup-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  transition: all 0.2s;
+}
+.vector-popup .popup-links a:hover { background: rgba(96, 165, 250, 0.2); color: #93bbfd; }
+.vector-popup .popup-links a svg { width: 12px; height: 12px; }
 
 /* ============ Vector Legend ============ */
 .vector-legend {

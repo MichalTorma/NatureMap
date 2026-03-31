@@ -1303,12 +1303,42 @@ async function initMap() {
               
               const thumbUrl = hasImage ? gbifThumb(occ.key, media) : '';
               const imgHtml = hasImage ? `<img src="${thumbUrl}" alt="${occ.scientificName || ''}" loading="lazy" onerror="this.remove()">` : '';
+
+              let dateStr = 'Unknown';
+              if (occ.eventDate) {
+                try { dateStr = new Date(occ.eventDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+                catch { dateStr = occ.eventDate; }
+              } else if (occ.year) { dateStr = String(occ.year); }
+
+              const recorder = occ.recordedBy || '';
+              const recorderHtml = recorder ? `<div class="popup-detail">${getIconSvg('user')} ${recorder}</div>` : '';
+
+              const basisLabels: Record<string, string> = {
+                HUMAN_OBSERVATION: 'Human Observation', MACHINE_OBSERVATION: 'Machine Observation',
+                PRESERVED_SPECIMEN: 'Preserved Specimen', FOSSIL_SPECIMEN: 'Fossil Specimen',
+                LIVING_SPECIMEN: 'Living Specimen', MATERIAL_SAMPLE: 'Material Sample',
+                MATERIAL_CITATION: 'Material Citation', OBSERVATION: 'Observation', OCCURRENCE: 'Occurrence'
+              };
+              const basisHtml = occ.basisOfRecord ? `<div class="popup-detail">${getIconSvg('clipboard-list')} ${basisLabels[occ.basisOfRecord] || occ.basisOfRecord}</div>` : '';
+
+              const gbifUrl = `https://www.gbif.org/occurrence/${occ.key}`;
+              const sourceRef = occ.references || '';
+              const sourceHtml = sourceRef ? `<a href="${sourceRef}" target="_blank" rel="noopener">${getIconSvg('external-link')} Source</a>` : '';
+
               const popupHtml = `
                 <div class="vector-popup">
                   ${imgHtml}
                   <div class="title">${occ.scientificName || 'Unknown Species'}</div>
                   <div class="vernacular-popup"></div>
-                  <div class="meta">${getIconSvg('calendar')} Observed: ${occ.year || 'Unknown'}</div>
+                  <div class="popup-details">
+                    <div class="popup-detail">${getIconSvg('calendar')} ${dateStr}</div>
+                    ${recorderHtml}
+                    ${basisHtml}
+                  </div>
+                  <div class="popup-links">
+                    <a href="${gbifUrl}" target="_blank" rel="noopener">${getIconSvg('external-link')} GBIF</a>
+                    ${sourceHtml}
+                  </div>
                 </div>
               `;
               marker.bindPopup(popupHtml);
