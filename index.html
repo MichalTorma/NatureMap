@@ -18,23 +18,6 @@
       </button>
     </div>
 
-    <!-- Species Search Panel -->
-    <div id="search-panel" class="search-panel">
-      <div class="search-panel-header">
-        <h3>FILTER SPECIES</h3>
-        <button id="search-panel-close" class="panel-close-btn" aria-label="Close search">
-          <i data-lucide="x"></i>
-        </button>
-      </div>
-      <div class="search-panel-body">
-        <div class="search-container">
-          <input type="text" id="gbif-search" placeholder="Search species, genus, family..." autocomplete="off" aria-label="Search species by name">
-          <ul id="gbif-results" class="search-results" role="listbox" aria-label="Search results"></ul>
-        </div>
-        <div id="gbif-history" class="history-shelf"></div>
-      </div>
-    </div>
-
     <!-- Dynamic Vector Taxonomy Legend -->
     <div id="vector-legend" class="vector-legend">
       <div class="legend-header">
@@ -45,159 +28,177 @@
       </div>
       <div id="vector-legend-body" class="legend-body"></div>
     </div>
+
+    <!-- Base Layer Popover -->
+    <div id="base-layer-popover" class="base-layer-popover">
+      <div id="base-layer-grid" class="base-layer-grid"></div>
+    </div>
     
-    <!-- Floating Speed-Dial Controls -->
-    <div id="location-control" class="speed-dial">
-      <div class="speed-dial-items">
-        <button id="legend-toggle" class="locate-fab legend-fab hidden speed-dial-item" aria-label="Species Legend" title="Species Legend">
-          <i data-lucide="list"></i>
-          <span id="legend-badge" class="fab-badge">0</span>
+    <!-- Layer FAB Stack -->
+    <div id="layer-stack" class="layer-stack">
+      <div class="layer-stack-items">
+        <button id="gbif-fab" class="layer-fab gbif-fab active layer-stack-item" aria-label="Biodiversity" title="Biodiversity">
+          <i data-lucide="hexagon"></i>
         </button>
-        <div class="fab-with-label speed-dial-item">
-          <span id="search-fab-label" class="fab-label">All Species</span>
-          <button id="search-fab" class="locate-fab search-fab" aria-label="Search Species" title="Search Species">
-            <i data-lucide="search"></i>
-          </button>
-        </div>
-        <button id="settings-toggle" class="locate-fab settings-fab speed-dial-item" aria-label="Map Settings" title="Map Settings">
-          <i data-lucide="sliders-horizontal"></i>
-        </button>
-        <button id="share-btn" class="locate-fab speed-dial-item" aria-label="Share Map Link" title="Copy mapped view to clipboard">
-          <i data-lucide="link"></i>
-        </button>
-        <button id="locate-btn" class="locate-fab speed-dial-item" aria-label="Find My Location">
-          <i data-lucide="locate"></i>
+        <div id="overlay-fabs"></div>
+        <button id="base-layer-fab" class="layer-fab base-fab layer-stack-item" aria-label="Base Layer" title="Base Layer">
+          <i data-lucide="map"></i>
         </button>
       </div>
+      <button id="legend-toggle" class="layer-fab legend-fab hidden" aria-label="Species Legend" title="Species Legend">
+        <i data-lucide="list"></i>
+        <span id="legend-badge" class="fab-badge">0</span>
+      </button>
       <button id="clear-points-btn" class="clear-points-fab hidden" aria-label="Clear Points" title="Clear Points">
         <i data-lucide="trash-2"></i>
       </button>
-      <button id="menu-fab" class="locate-fab menu-fab" aria-label="Menu" title="Menu">
-        <i data-lucide="plus" class="menu-icon"></i>
-        <span id="menu-filter-label" class="menu-filter-label" style="display:none;"></span>
+      <button id="locate-btn" class="layer-fab" aria-label="Find My Location" title="Find My Location">
+        <i data-lucide="locate"></i>
+      </button>
+      <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
+        <i data-lucide="layers" class="menu-icon"></i>
       </button>
     </div>
 
-    <div id="ui-panel" class="glass-panel">
+    <!-- GBIF Settings Panel -->
+    <div id="gbif-panel" class="gbif-settings-panel">
       <div class="drag-handle"></div>
-      
       <div class="panel-header">
-        <h1>MAP STYLING</h1>
-        <button id="panel-close" class="panel-close-btn" aria-label="Close panel">
-          <i data-lucide="x"></i>
-        </button>
-      </div>
-
-      <div class="panel-body">
-        <div class="ui-section collapsible active" id="styling-section">
-          <div class="section-header">
-            <h2>BASE LAYERS</h2>
-            <i data-lucide="chevron-down" class="chevron"></i>
-          </div>
-          <div class="section-content">
-            <div id="layer-options" class="layer-options">
-              <!-- Buttons will be injected here dynamically -->
-            </div>
-          </div>
+        <h1>BIODIVERSITY</h1>
+        <div class="panel-header-actions">
+          <label class="layer-toggle" title="Toggle biodiversity layer">
+            <input type="checkbox" id="gbif-toggle" checked>
+            <span class="toggle-track"></span>
+          </label>
+          <button id="gbif-panel-close" class="panel-close-btn" aria-label="Close panel">
+            <i data-lucide="x"></i>
+          </button>
         </div>
-        
-        <div class="ui-section collapsible active" id="gbif-section">
+      </div>
+      <div class="panel-body">
+        <div class="ui-section collapsible active" id="gbif-search-section">
           <div class="section-header">
-            <h2>BIODIVERSITY</h2>
+            <h2>SPECIES FILTER</h2>
             <div class="section-header-actions">
-              <label class="layer-toggle" title="Toggle biodiversity layer">
-                <input type="checkbox" id="gbif-toggle" checked>
-                <span class="toggle-track"></span>
-              </label>
+              <div id="gbif-section-status"></div>
               <i data-lucide="chevron-down" class="chevron"></i>
             </div>
           </div>
           <div class="section-content">
-          <div class="filter-controls">
-            <div class="control-group">
-              <span class="label">Visualization Shape</span>
-              <div class="picker-grid" id="gbif-shape-picker">
-                <button class="picker-btn active" data-shape="hex" title="Hexagonal Grid" aria-label="Hexagonal grid visualization">
-                  <i data-lucide="hexagon"></i>
-                </button>
-                <button class="picker-btn" data-shape="square" title="Square Grid" aria-label="Square grid visualization">
-                  <i data-lucide="layout-grid"></i>
-                </button>
-                <button class="picker-btn" data-shape="point" title="Individual Records" aria-label="Individual point records">
-                  <i data-lucide="map-pin"></i>
-                </button>
-                <button class="picker-btn" data-shape="heatmap" title="Density Heatmap" aria-label="Density heatmap visualization">
-                  <i data-lucide="wind"></i>
-                </button>
-              </div>
+            <div class="search-container">
+              <input type="text" id="gbif-search" placeholder="Search species, genus, family..." autocomplete="off" aria-label="Search species by name">
+              <ul id="gbif-results" class="search-results" role="listbox" aria-label="Search results"></ul>
             </div>
+            <div id="gbif-history" class="history-shelf"></div>
+          </div>
+        </div>
 
-            <div class="control-group">
-              <div class="label-row">
-                <span class="label">Color Palette</span>
-              </div>
-              <div class="palette-picker" id="gbif-palette-picker">
-                <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic" aria-label="Classic palette (yellow to red)"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest" aria-label="Forest palette (light to dark green)"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean" aria-label="Ocean palette (light to dark blue)"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire" aria-label="Fire palette (orange to red)"><div class="badge"></div></button>
-                <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal" aria-label="Royal palette (light to dark purple)"><div class="badge"></div></button>
-              </div>
-            </div>
-
-            <div class="advanced-section">
-              <div class="advanced-header" id="advanced-toggle">
-                <span>Scientific Tuning</span>
-                <i data-lucide="settings-2"></i>
-              </div>
-              <div class="advanced-drawer" id="advanced-drawer" style="display: none;">
-                <div class="control-group">
-                  <div class="label-row" style="margin-bottom: 8px;">
-                    <span class="label" title="How the grid visually responds when zooming the map">Scale Behavior</span>
-                  </div>
-                  <div id="gbif-scale-mode" class="button-toggle-group">
-                    <button class="toggle-btn active" data-mode="static" title="Hexagons always remain the same visual size on your screen">Static Area</button>
-                    <button class="toggle-btn" data-mode="geographic" title="Hexagons expand visually to lock onto their physical geographic boundaries">Geo Locked</button>
-                  </div>
-                </div>
-                <div class="control-group" style="padding-top: 10px;">
-                  <div class="label-row">
-                    <span class="label" title="Base number of bins per map tile">Base Resolution</span>
-                    <span id="density-value" class="val-tag">45 Bins</span>
-                  </div>
-                  <input type="range" id="gbif-density" min="10" max="150" value="45" step="1" aria-label="Base resolution bins">
-                </div>
-                <div class="control-group">
-                  <div class="label-row">
-                    <span class="label">Opacity</span>
-                    <span id="opacity-value" class="val-tag">80%</span>
-                  </div>
-                  <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
+        <div class="ui-section collapsible active" id="gbif-style-section">
+          <div class="section-header">
+            <h2>VISUALIZATION</h2>
+            <i data-lucide="chevron-down" class="chevron"></i>
+          </div>
+          <div class="section-content">
+            <div class="filter-controls">
+              <div class="control-group">
+                <span class="label">Shape</span>
+                <div class="picker-grid" id="gbif-shape-picker">
+                  <button class="picker-btn active" data-shape="hex" title="Hexagonal Grid" aria-label="Hexagonal grid visualization">
+                    <i data-lucide="hexagon"></i>
+                  </button>
+                  <button class="picker-btn" data-shape="square" title="Square Grid" aria-label="Square grid visualization">
+                    <i data-lucide="layout-grid"></i>
+                  </button>
+                  <button class="picker-btn" data-shape="point" title="Individual Records" aria-label="Individual point records">
+                    <i data-lucide="map-pin"></i>
+                  </button>
+                  <button class="picker-btn" data-shape="heatmap" title="Density Heatmap" aria-label="Density heatmap visualization">
+                    <i data-lucide="wind"></i>
+                  </button>
                 </div>
               </div>
-            </div>
-            
-            <div class="control-group">
-              <span class="label" title="Cumulative Range">Timeline</span>
-              <div class="timeline-control">
-                <button id="gbif-play" class="play-btn" title="Play Evolution"><i data-lucide="play"></i></button>
-                <input type="range" id="gbif-year" min="1900" max="2025" value="2025" step="1" aria-label="Timeline year range">
-                <span id="year-value">All Years</span>
+              <div class="control-group">
+                <div class="label-row">
+                  <span class="label">Color Palette</span>
+                </div>
+                <div class="palette-picker" id="gbif-palette-picker">
+                  <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic" aria-label="Classic palette"><div class="badge"></div></button>
+                  <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest" aria-label="Forest palette"><div class="badge"></div></button>
+                  <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean" aria-label="Ocean palette"><div class="badge"></div></button>
+                  <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire" aria-label="Fire palette"><div class="badge"></div></button>
+                  <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal" aria-label="Royal palette"><div class="badge"></div></button>
+                </div>
               </div>
-            </div>
-            
-            <div class="control-group">
-              <span class="label">Origin</span>
-              <div id="gbif-origin" class="button-toggle-group">
-                <button class="toggle-btn" data-value="HUMAN_OBSERVATION">Human</button>
-                <button class="toggle-btn" data-value="PRESERVED_SPECIMEN">Museum</button>
-                <button class="toggle-btn active" data-value="ALL">All</button>
+              <div class="advanced-section">
+                <div class="advanced-header" id="advanced-toggle">
+                  <span>Scientific Tuning</span>
+                  <i data-lucide="settings-2"></i>
+                </div>
+                <div class="advanced-drawer" id="advanced-drawer" style="display: none;">
+                  <div class="control-group">
+                    <div class="label-row" style="margin-bottom: 8px;">
+                      <span class="label" title="How the grid visually responds when zooming the map">Scale Behavior</span>
+                    </div>
+                    <div id="gbif-scale-mode" class="button-toggle-group">
+                      <button class="toggle-btn active" data-mode="static" title="Static visual size">Static Area</button>
+                      <button class="toggle-btn" data-mode="geographic" title="Geo-locked boundaries">Geo Locked</button>
+                    </div>
+                  </div>
+                  <div class="control-group" style="padding-top: 10px;">
+                    <div class="label-row">
+                      <span class="label" title="Base number of bins per map tile">Base Resolution</span>
+                      <span id="density-value" class="val-tag">45 Bins</span>
+                    </div>
+                    <input type="range" id="gbif-density" min="10" max="150" value="45" step="1" aria-label="Base resolution bins">
+                  </div>
+                  <div class="control-group">
+                    <div class="label-row">
+                      <span class="label">Opacity</span>
+                      <span id="opacity-value" class="val-tag">80%</span>
+                    </div>
+                    <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="ui-section collapsible active" id="lang-section">
+        <div class="ui-section collapsible active">
+          <div class="section-header">
+            <h2>DATA FILTERS</h2>
+            <i data-lucide="chevron-down" class="chevron"></i>
+          </div>
+          <div class="section-content">
+            <div class="filter-controls">
+              <div class="control-group">
+                <span class="label" title="Cumulative Range">Timeline</span>
+                <div class="timeline-control">
+                  <button id="gbif-play" class="play-btn" title="Play Evolution"><i data-lucide="play"></i></button>
+                  <input type="range" id="gbif-year" min="1900" max="2026" value="2026" step="1" aria-label="Timeline year range">
+                  <span id="year-value">All Years</span>
+                </div>
+              </div>
+              <div class="control-group">
+                <span class="label">Basis of Record</span>
+                <div id="gbif-origin" class="chip-toggle-group">
+                  <button class="chip-btn active" data-value="ALL">All</button>
+                  <button class="chip-btn" data-value="HUMAN_OBSERVATION">Human Observation</button>
+                  <button class="chip-btn" data-value="MACHINE_OBSERVATION">Machine Observation</button>
+                  <button class="chip-btn" data-value="PRESERVED_SPECIMEN">Preserved Specimen</button>
+                  <button class="chip-btn" data-value="FOSSIL_SPECIMEN">Fossil Specimen</button>
+                  <button class="chip-btn" data-value="LIVING_SPECIMEN">Living Specimen</button>
+                  <button class="chip-btn" data-value="MATERIAL_SAMPLE">Material Sample</button>
+                  <button class="chip-btn" data-value="MATERIAL_CITATION">Material Citation</button>
+                  <button class="chip-btn" data-value="OBSERVATION">Observation</button>
+                  <button class="chip-btn" data-value="OCCURRENCE">Occurrence</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ui-section collapsible" id="lang-section">
           <div class="section-header">
             <h2>SPECIES NAMES</h2>
             <i data-lucide="chevron-down" class="chevron"></i>
@@ -221,8 +222,8 @@
           </button>
         </div>
       </div>
-      </div>
     </div>
+
     <div id="panel-overlay" class="panel-overlay"></div>
     <div id="geo-toast" class="geo-toast"></div>
     <div id="error-toast" class="error-toast"></div>
@@ -233,9 +234,9 @@
         <h2>Welcome to MyMap</h2>
         <p>You're viewing live biodiversity data from <strong>GBIF</strong> — the Global Biodiversity Information Facility.</p>
         <ul>
-          <li>Open the menu to <strong>search species</strong> and change map styles</li>
+          <li>Tap the <strong>layers button</strong> to switch base maps and toggle overlays</li>
           <li><strong>Zoom in</strong> to explore individual observation records</li>
-          <li><strong>Share</strong> any view via a deep link</li>
+          <li><strong>Share</strong> any view by copying the URL</li>
         </ul>
         <button id="welcome-dismiss" class="welcome-dismiss-btn">Get Started</button>
       </div>

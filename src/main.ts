@@ -21,7 +21,8 @@ interface AppConfig {
     center: [number, number];
     zoom: number;
   };
-  layers: LayerConfig[];
+  baseLayers: LayerConfig[];
+  overlays: LayerConfig[];
   gbif: {
     defaultStyle: string;
     availableStyles: { id: string; label: string; params: string }[];
@@ -75,8 +76,14 @@ async function initMap() {
     
     // Core App State
     const STORAGE_KEY_BASE = 'mymap_base_layer';
-    const defaultBaseLayer = config.layers.find(l => l.active)?.id || config.layers[0]?.id || 'osm';
+    const STORAGE_KEY_OVERLAYS = 'mymap_overlays';
+    const defaultBaseLayer = config.baseLayers.find(l => l.active)?.id || config.baseLayers[0]?.id || 'osm';
     let currentBaseLayer = urlParams.get('base') || localStorage.getItem(STORAGE_KEY_BASE) || defaultBaseLayer;
+    let activeOverlayIds: Set<string> = new Set(
+      urlParams.has('overlays')
+        ? urlParams.get('overlays')!.split(',').filter(Boolean)
+        : JSON.parse(localStorage.getItem(STORAGE_KEY_OVERLAYS) || '[]')
+    );
     let gbifLayer: L.TileLayer | null = null;
     let currentTaxonKey: number | null = urlParams.has('taxon') ? parseInt(urlParams.get('taxon')!) : null;
     let currentShape = urlParams.get('shape') || 'hex';
@@ -89,7 +96,6 @@ async function initMap() {
     let gbifEnabled = true;
     let isPlaying = false;
     let playInterval: any;
-    let closeSearchPanel = () => {};
 
     const STORAGE_KEY_LANGS = 'mymap_languages';
     const langLookup1 = by639_1 as Record<string, Code | undefined>;
@@ -114,7 +120,7 @@ async function initMap() {
 
     // 2. Initialize Map
     const map = L.map('map', { center: initialCenter, zoom: initialZoom, layers: [] });
-    // URL Serializer
+
     const syncStateToURL = () => {
       const p = new URLSearchParams();
       const center = map.getCenter();
@@ -122,6 +128,7 @@ async function initMap() {
       p.set('lng', center.lng.toFixed(4));
       p.set('z', map.getZoom().toString());
       p.set('base', currentBaseLayer);
+      if (activeOverlayIds.size > 0) p.set('overlays', Array.from(activeOverlayIds).join(','));
       if (currentTaxonKey) p.set('taxon', currentTaxonKey.toString());
       p.set('shape', currentShape);
       p.set('palette', currentPalette);
@@ -143,40 +150,208 @@ async function initMap() {
     map.on('moveend', saveState);
     map.on('zoomend', saveState);
 
-    // Initial load URL push if needed
     if (urlParams.toString() !== '') syncStateToURL();
 
-    // 3. Layer Management
-    const baseLayers: Record<string, L.Layer> = {};
-    const layerContainer = document.getElementById('layer-options');
+    // 3. Base Layer Management
+    const baseLayerInstances: Record<string, L.TileLayer> = {};
+    const baseLayerPopover = document.getElementById('base-layer-popover');
+    const baseLayerGrid = document.getElementById('base-layer-grid');
+    const baseLayerFab = document.getElementById('base-layer-fab');
 
-    config.layers.forEach((layerSpec) => {
-      const leafletLayer = layerSpec.type === 'wms' 
-        ? L.tileLayer.wms(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous', zIndex: 0 })
-        : L.tileLayer(layerSpec.url, { ...layerSpec.options, crossOrigin: 'anonymous', zIndex: 0 });
-      baseLayers[layerSpec.id] = leafletLayer;
-      const isActive = layerSpec.id === currentBaseLayer;
-      if (isActive) leafletLayer.addTo(map);
+    const updateBaseLayerFabIcon = () => {
+      const spec = config.baseLayers.find(l => l.id === currentBaseLayer);
+      if (baseLayerFab && spec) {
+        baseLayerFab.innerHTML = getIconSvg(spec.icon);
+        baseLayerFab.title = spec.label;
+      }
+    };
 
-      if (layerContainer) {
+    const selectBaseLayer = (id: string) => {
+      Object.values(baseLayerInstances).forEach(l => map.removeLayer(l));
+      const layer = baseLayerInstances[id];
+      if (layer) layer.addTo(map);
+      currentBaseLayer = id;
+      localStorage.setItem(STORAGE_KEY_BASE, id);
+      updateBaseLayerFabIcon();
+      baseLayerGrid?.querySelectorAll('.base-layer-option').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-layer') === id);
+      });
+      closeBasePopover();
+      syncStateToURL();
+    };
+
+    config.baseLayers.forEach(spec => {
+      const layer = spec.type === 'wms'
+        ? L.tileLayer.wms(spec.url, { ...spec.options, crossOrigin: 'anonymous', zIndex: 0 })
+        : L.tileLayer(spec.url, { ...spec.options, crossOrigin: 'anonymous', zIndex: 0 });
+      baseLayerInstances[spec.id] = layer;
+      if (spec.id === currentBaseLayer) layer.addTo(map);
+
+      if (baseLayerGrid) {
         const btn = document.createElement('button');
-        btn.className = `layer-btn ${isActive ? 'active' : ''}`;
-        btn.setAttribute('data-layer', layerSpec.id);
-        btn.innerHTML = `<div class="status-dot"></div><i data-lucide="${layerSpec.icon}"></i><span>${layerSpec.label}</span>`;
-        layerContainer.appendChild(btn);
-        btn.addEventListener('click', () => {
-          Object.values(baseLayers).forEach(l => map.removeLayer(l));
-          leafletLayer.addTo(map);
-          document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          currentBaseLayer = layerSpec.id;
-          localStorage.setItem(STORAGE_KEY_BASE, currentBaseLayer);
-          syncStateToURL();
-        });
+        btn.className = `base-layer-option ${spec.id === currentBaseLayer ? 'active' : ''}`;
+        btn.setAttribute('data-layer', spec.id);
+        btn.innerHTML = `${getIconSvg(spec.icon)}<span>${spec.label}</span>`;
+        btn.addEventListener('click', () => selectBaseLayer(spec.id));
+        baseLayerGrid.appendChild(btn);
       }
     });
 
-    // 4. GBIF Biodiversity Core Logic
+    updateBaseLayerFabIcon();
+
+    let basePopoverOpen = false;
+    const openBasePopover = () => {
+      baseLayerPopover?.classList.add('open');
+      basePopoverOpen = true;
+    };
+    const closeBasePopover = () => {
+      baseLayerPopover?.classList.remove('open');
+      basePopoverOpen = false;
+    };
+
+    baseLayerFab?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (basePopoverOpen) closeBasePopover();
+      else openBasePopover();
+    });
+
+    // 4. Overlay Management
+    const overlayInstances: Record<string, L.TileLayer> = {};
+    const overlayFabContainer = document.getElementById('overlay-fabs');
+
+    config.overlays.forEach((spec, idx) => {
+      const layer = spec.type === 'wms'
+        ? L.tileLayer.wms(spec.url, { ...spec.options, crossOrigin: 'anonymous', zIndex: 5 + idx })
+        : L.tileLayer(spec.url, { ...spec.options, crossOrigin: 'anonymous', zIndex: 5 + idx });
+      overlayInstances[spec.id] = layer;
+
+      const isActive = activeOverlayIds.has(spec.id);
+      if (isActive) layer.addTo(map);
+
+      if (overlayFabContainer) {
+        const btn = document.createElement('button');
+        btn.className = `layer-fab overlay-fab layer-stack-item ${isActive ? 'active' : ''}`;
+        btn.setAttribute('data-overlay', spec.id);
+        btn.setAttribute('aria-label', spec.label);
+        btn.title = spec.label;
+        btn.innerHTML = getIconSvg(spec.icon);
+        btn.addEventListener('click', () => {
+          const nowActive = activeOverlayIds.has(spec.id);
+          if (nowActive) {
+            map.removeLayer(layer);
+            activeOverlayIds.delete(spec.id);
+            btn.classList.remove('active');
+          } else {
+            layer.addTo(map);
+            activeOverlayIds.add(spec.id);
+            btn.classList.add('active');
+          }
+          localStorage.setItem(STORAGE_KEY_OVERLAYS, JSON.stringify(Array.from(activeOverlayIds)));
+          syncStateToURL();
+        });
+        overlayFabContainer.appendChild(btn);
+      }
+    });
+
+    // 5. Layer Stack FAB UI
+    const layerStack = document.getElementById('layer-stack');
+    const menuFab = document.getElementById('menu-fab');
+    const gbifFab = document.getElementById('gbif-fab');
+
+    const closeLayerStack = () => {
+      layerStack?.classList.remove('open');
+      closeBasePopover();
+    };
+    menuFab?.addEventListener('click', () => layerStack?.classList.toggle('open'));
+    map.on('click', () => {
+      closeLayerStack();
+      closeGbifPanel();
+    });
+
+    // 6. GBIF Panel UI
+    const gbifPanel = document.getElementById('gbif-panel');
+    const gbifPanelClose = document.getElementById('gbif-panel-close');
+    const panelOverlay = document.getElementById('panel-overlay');
+    const gbifToggle = document.getElementById('gbif-toggle') as HTMLInputElement;
+    const gbifStatusDot = document.getElementById('gbif-section-status');
+
+    const openGbifPanel = () => {
+      gbifPanel?.classList.add('open');
+      gbifFab?.classList.add('panel-open');
+      panelOverlay?.classList.add('active');
+    };
+    const closeGbifPanel = () => {
+      gbifPanel?.classList.remove('open');
+      gbifFab?.classList.remove('panel-open');
+      if (panelOverlay) panelOverlay.classList.remove('active');
+      if (gbifPanel) gbifPanel.style.transform = '';
+    };
+
+    gbifFab?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (gbifPanel?.classList.contains('open')) {
+        closeGbifPanel();
+      } else {
+        openGbifPanel();
+      }
+    });
+    gbifPanelClose?.addEventListener('click', closeGbifPanel);
+    panelOverlay?.addEventListener('click', closeGbifPanel);
+
+    // Swipe-to-dismiss for mobile bottom sheet
+    const dragHandle = gbifPanel?.querySelector('.drag-handle');
+    if (dragHandle && gbifPanel) {
+      let startY = 0;
+      let currentDragY = 0;
+      let isDragging = false;
+      dragHandle.addEventListener('touchstart', (e) => {
+        const te = e as TouchEvent;
+        startY = te.touches[0].clientY;
+        isDragging = true;
+        gbifPanel.style.transition = 'none';
+      });
+      dragHandle.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const te = e as TouchEvent;
+        currentDragY = Math.max(0, te.touches[0].clientY - startY);
+        gbifPanel.style.transform = `translateY(${currentDragY}px)`;
+      });
+      const endDrag = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        gbifPanel.style.transition = '';
+        if (currentDragY > 100) closeGbifPanel();
+        else gbifPanel.style.transform = '';
+        currentDragY = 0;
+      };
+      dragHandle.addEventListener('touchend', endDrag);
+      dragHandle.addEventListener('touchcancel', endDrag);
+    }
+
+    // GBIF toggle wired to both the FAB active state and the panel checkbox
+    const updateGbifFabState = () => {
+      gbifFab?.classList.toggle('active', gbifEnabled);
+    };
+
+    if (gbifToggle) {
+      gbifToggle.addEventListener('click', (e) => e.stopPropagation());
+      gbifToggle.addEventListener('change', () => {
+        gbifEnabled = gbifToggle.checked;
+        updateGbifFabState();
+        if (gbifEnabled) {
+          updateGbifLayer();
+        } else {
+          if (gbifLayer) map.removeLayer(gbifLayer);
+          vectorLayer.clearLayers();
+          vectorMarkers = [];
+          activeFilters.clear();
+          hideLegendFab();
+          if (clearPointsBtn) clearPointsBtn.classList.add('hidden');
+        }
+      });
+    }
+
+    // 7. GBIF Biodiversity Core Logic
 
     const GbifLayerClass = L.TileLayer.extend({
       getTileUrl: function(coords: any) {
@@ -207,37 +382,24 @@ async function initMap() {
       }
     });
 
-    const gbifSection = document.getElementById('gbif-section');
-    const gbifHeader = gbifSection?.querySelector('.section-header');
-    if (gbifHeader) {
-      const dot = document.createElement('div');
-      dot.className = 'status-dot';
-      gbifHeader.appendChild(dot);
-    }
-
     const gbifSearch = document.getElementById('gbif-search') as HTMLInputElement;
     const gbifResults = document.getElementById('gbif-results') as HTMLElement;
-    const searchFabLabel = document.getElementById('search-fab-label');
-    const menuFilterLabel = document.getElementById('menu-filter-label');
 
     const updateFilterLabel = (name: string | null) => {
-      if (searchFabLabel) {
-        searchFabLabel.textContent = name || 'All Species';
-        searchFabLabel.classList.toggle('filtered', !!name);
-      }
-      if (menuFilterLabel) {
-        if (name) {
-          menuFilterLabel.textContent = name;
-          menuFilterLabel.style.display = '';
-        } else {
-          menuFilterLabel.style.display = 'none';
-        }
+      const label = gbifFab?.querySelector('.gbif-filter-label');
+      if (!label) return;
+      if (name) {
+        label.textContent = name;
+        (label as HTMLElement).style.display = '';
+      } else {
+        (label as HTMLElement).style.display = 'none';
       }
     };
+
     const gbifYearInput = document.getElementById('gbif-year') as HTMLInputElement;
     const yearValueDisplay = document.getElementById('year-value') as HTMLElement;
     const playBtn = document.getElementById('gbif-play');
-    const originBtns = document.querySelectorAll('#gbif-origin .toggle-btn');
+    const originBtns = document.querySelectorAll('#gbif-origin .chip-btn');
     const shapeBtns = document.querySelectorAll('#gbif-shape-picker .picker-btn');
     const paletteBtns = document.querySelectorAll('#gbif-palette-picker .palette-btn');
     const densityInput = document.getElementById('gbif-density') as HTMLInputElement;
@@ -250,8 +412,6 @@ async function initMap() {
     const styleTester = document.getElementById('style-tester') as HTMLCanvasElement;
 
     const resolveGbifStyle = (palette: string, shape: string): string => {
-      // 100% Strictly Typed GBIF Map Style Resolutions.
-      // We must NEVER mix .point styles on .poly grids, as it destroys scientific mapping data (renders dots inside hex bins).
       const isBinned = shape === 'hex' || shape === 'square';
       const isHeatmap = shape === 'heatmap';
       
@@ -261,13 +421,10 @@ async function initMap() {
         case 'green':
           return isBinned ? 'green-noborder.poly' : (isHeatmap ? 'greenHeat.point' : 'green.point');
         case 'blue':
-          // Ocean Palette -> 'classic-noborder' uses a deep blue/cyan scaling for polygons.
           return isBinned ? 'classic-noborder.poly' : 'blueHeat.point'; 
         case 'orange':
-          // Fire Palette -> 'red' is the official corresponding native GBIF polygon ramp. (No 'noborder' variant exists natively)
           return isBinned ? 'red.poly' : (isHeatmap ? 'orangeHeat.point' : 'fire.point');
         case 'purpleHeat':
-          // Royal Palette -> 'purpleYellow-noborder' is the officially supported contiguous binning ramp.
           return isBinned ? 'purpleYellow-noborder.poly' : 'purpleHeat.point';
         default:
           return 'classic.point';
@@ -377,7 +534,6 @@ async function initMap() {
         ctx.clearRect(0, 0, 256, 256);
         ctx.drawImage(img, 0, 0, 256, 256);
         const data = ctx.getImageData(0, 0, 256, 256).data;
-        // Verify multiple non-transparent pixels to ensure capability vs noise
         let pixels = 0;
         for (let i = 3; i < data.length; i += 4) { if (data[i] > 10) pixels++; if (pixels > 1) return true; }
         return false;
@@ -515,7 +671,6 @@ async function initMap() {
             updateFilterLabel(rowData.primaryName);
             saveToHistory({ key: s.key, name: rowData.primaryName, names: rowData.resolvedNames });
             debouncedUpdateGbifLayer(10);
-            closeSearchPanel();
           });
           gbifResults.appendChild(li);
           rows.push(rowData);
@@ -684,7 +839,7 @@ async function initMap() {
 
     gbifYearInput.addEventListener('input', () => {
       const val = parseInt(gbifYearInput.value);
-      currentYear = val >= 2025 ? 'ALL' : val;
+      currentYear = val >= parseInt(gbifYearInput.max) ? 'ALL' : val;
       yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
     });
     gbifYearInput.addEventListener('change', () => debouncedUpdateGbifLayer(200));
@@ -698,11 +853,11 @@ async function initMap() {
         LucideIcons.createIcons({ icons: iconsObject });
         
         if (isPlaying) {
-          if (currentYear === 'ALL' || currentYear >= 2025) currentYear = 1900;
+          if (currentYear === 'ALL' || currentYear >= parseInt(gbifYearInput.max)) currentYear = 1900;
           if (!gbifLayer) updateGbifLayer();
           playInterval = setInterval(() => {
             if (currentYear !== 'ALL') currentYear += 5;
-            if (currentYear !== 'ALL' && currentYear > 2025) {
+            if (currentYear !== 'ALL' && currentYear > parseInt(gbifYearInput.max)) {
               currentYear = 'ALL'; 
               isPlaying = false; 
               clearInterval(playInterval);
@@ -710,7 +865,7 @@ async function initMap() {
               if (icon) icon.setAttribute('data-lucide', 'play');
               LucideIcons.createIcons({ icons: iconsObject });
             }
-            gbifYearInput.value = currentYear === 'ALL' ? "2025" : currentYear.toString();
+            gbifYearInput.value = currentYear === 'ALL' ? gbifYearInput.max : currentYear.toString();
             yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
             updateGbifUrlOnly();
           }, 800);
@@ -726,7 +881,7 @@ async function initMap() {
           originBtns.forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         } else {
-          const allBtn = document.querySelector('[data-value="ALL"]');
+          const allBtn = document.querySelector('#gbif-origin [data-value="ALL"]');
           allBtn?.classList.remove('active');
           if (currentOrigins.includes('ALL')) currentOrigins = [];
           if (currentOrigins.includes(value)) { 
@@ -745,6 +900,7 @@ async function initMap() {
       });
     });
 
+    // 8. Geolocation
     const locateBtn = document.getElementById('locate-btn');
     const geoToast = document.getElementById('geo-toast');
     let userMarker: L.Marker | null = null;
@@ -806,7 +962,6 @@ async function initMap() {
           steps.push('⚠ This page is served over HTTP — geolocation requires HTTPS');
         return { title: 'Location Unavailable', message: 'Your device cannot determine its position.', steps };
       }
-      // code === 3 or other
       const steps: string[] = [];
       if (os === 'macos') {
         steps.push('macOS: System Settings → Privacy & Security → Location Services → make sure it is ON and your browser is listed');
@@ -898,29 +1053,7 @@ async function initMap() {
     }
     doLocate(!savedCenter ? false : true);
 
-    const shareBtn = document.getElementById('share-btn');
-    if (shareBtn) {
-      shareBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(window.location.href);
-          const icon = shareBtn.querySelector('i');
-          if (icon) icon.setAttribute('data-lucide', 'check');
-          shareBtn.classList.add('copied');
-          shareBtn.setAttribute('title', 'Copied to Clipboard!');
-          LucideIcons.createIcons({ icons: iconsObject });
-          setTimeout(() => {
-            shareBtn.classList.remove('copied');
-            if (icon) icon.setAttribute('data-lucide', 'link');
-            shareBtn.setAttribute('title', 'Copy Map Link');
-            LucideIcons.createIcons({ icons: iconsObject });
-          }, 2000);
-        } catch (e) {
-          console.error('Failed to copy', e);
-        }
-      });
-    }
-
-    // 6. Micro-Vector Area Search
+    // 9. Micro-Vector Area Search
     const vectorControls = document.getElementById('vector-search-controls');
     const searchAreaBtn = document.getElementById('search-area-btn');
     const clearPointsBtn = document.getElementById('clear-points-btn');
@@ -1054,7 +1187,6 @@ async function initMap() {
         label,
         iconName
       };
-
     };
 
     map.on('zoomend', () => {
@@ -1077,12 +1209,16 @@ async function initMap() {
           if (iconEl) iconEl.outerHTML = getIconSvg('loader-2');
         }
         
-        if (gbifLayer) map.removeLayer(gbifLayer); // Hide raster heat while viewing vectors
+        if (gbifLayer) map.removeLayer(gbifLayer);
 
-        let url = `https://api.gbif.org/v1/occurrence/search?decimalLatitude=${bounds.getSouth()},${bounds.getNorth()}&decimalLongitude=${bounds.getWest()},${bounds.getEast()}&limit=300&occurrenceStatus=PRESENT`;
+        const south = Math.max(-90, bounds.getSouth());
+        const north = Math.min(90, bounds.getNorth());
+        const west = Math.max(-180, bounds.getWest());
+        const east = Math.min(180, bounds.getEast());
+        let url = `https://api.gbif.org/v1/occurrence/search?decimalLatitude=${south},${north}&decimalLongitude=${west},${east}&limit=300&occurrenceStatus=PRESENT`;
         if (currentYear !== 'ALL') url += `&year=1900,${currentYear}`;
         if (currentTaxonKey) url += `&taxonKey=${currentTaxonKey}`;
-        if (!currentOrigins.includes('ALL')) url += `&basisOfRecord=${currentOrigins.join(',')}`;
+        if (!currentOrigins.includes('ALL')) url += currentOrigins.map(o => `&basisOfRecord=${o}`).join('');
 
         try {
           vectorLayer.clearLayers();
@@ -1101,6 +1237,7 @@ async function initMap() {
           while (keepFetching) {
             const pageUrl = `${url}&offset=${offset}`;
             const res = await fetch(pageUrl);
+            if (!res.ok) throw new Error(`GBIF API returned ${res.status}`);
             const data = await res.json();
             
             if (offset === 0) totalCount = data.count || 0;
@@ -1161,7 +1298,6 @@ async function initMap() {
             setTimeout(() => { progressBar.style.width = '0%'; }, 500);
           }
           
-          // Generate Legend UI dynamically
           const taxaCounts = vectorMarkers.reduce((acc, m) => {
              if (!acc[m.cssClass]) acc[m.cssClass] = { count: 0, label: m.label, iconUrl: m.iconUrl };
              acc[m.cssClass].count++;
@@ -1205,7 +1341,6 @@ async function initMap() {
             openLegend();
           }
 
-
         } catch (e) {
           console.error('Vector Search Error:', e);
           showErrorToast('Area search failed — check your connection and try again.');
@@ -1229,148 +1364,27 @@ async function initMap() {
       });
     }
 
-    // Connect Deep-Link variables to UI Inputs visually
-    if (gbifYearInput) gbifYearInput.value = currentYear === 'ALL' ? '2025' : currentYear.toString();
+    // 10. Sync Deep-Link variables to UI
+    if (gbifYearInput) gbifYearInput.value = currentYear === 'ALL' ? gbifYearInput.max : currentYear.toString();
     if (yearValueDisplay) yearValueDisplay.textContent = currentYear === 'ALL' ? 'All Years' : `1900 - ${currentYear}`;
     if (densityInput) densityInput.value = currentDensity.toString();
     if (densityValueTag) densityValueTag.textContent = `${currentDensity} Bins`;
     if (opacityInput) opacityInput.value = currentOpacity.toString();
     if (opacityValueTag) opacityValueTag.textContent = `${Math.round(currentOpacity * 100)}%`;
-    document.querySelectorAll('#gbif-origin .toggle-btn').forEach(b => {
+    document.querySelectorAll('#gbif-origin .chip-btn').forEach(b => {
       b.classList.toggle('active', currentOrigins.includes(b.getAttribute('data-value') || ''));
     });
-    document.querySelectorAll('#gbif-shape .toggle-btn').forEach(b => {
+    document.querySelectorAll('#gbif-shape-picker .picker-btn').forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-shape') === currentShape);
     });
     document.querySelectorAll('#gbif-scale-mode .toggle-btn').forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-mode') === currentScaleMode);
     });
-    document.querySelectorAll('#gbif-palette .palette-btn').forEach(b => {
+    document.querySelectorAll('#gbif-palette-picker .palette-btn').forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-palette') === currentPalette);
     });
 
-    // 5. UI Interactivity (Speed-dial, panel toggle, collapsibles, biodiversity toggle)
-    const speedDial = document.getElementById('location-control');
-    const menuFab = document.getElementById('menu-fab');
-
-    const closeMenu = () => speedDial?.classList.remove('open');
-    menuFab?.addEventListener('click', () => speedDial?.classList.toggle('open'));
-    map.on('click', closeMenu);
-
-    const uiPanel = document.getElementById('ui-panel');
-    const panelOverlay = document.getElementById('panel-overlay');
-    const settingsToggle = document.getElementById('settings-toggle');
-    const panelCloseBtn = document.getElementById('panel-close');
-    const gbifToggle = document.getElementById('gbif-toggle') as HTMLInputElement;
-
-    const openPanel = () => {
-      uiPanel?.classList.add('open');
-      settingsToggle?.classList.add('active');
-      panelOverlay?.classList.add('active');
-    };
-
-    const closePanel = () => {
-      uiPanel?.classList.remove('open');
-      settingsToggle?.classList.remove('active');
-      panelOverlay?.classList.remove('active');
-      if (uiPanel) uiPanel.style.transform = '';
-    };
-
-    // Swipe-to-dismiss for mobile bottom sheet
-    const dragHandle = uiPanel?.querySelector('.drag-handle');
-    if (dragHandle && uiPanel) {
-      let startY = 0;
-      let currentDragY = 0;
-      let isDragging = false;
-      dragHandle.addEventListener('touchstart', (e) => {
-        const te = e as TouchEvent;
-        startY = te.touches[0].clientY;
-        isDragging = true;
-        uiPanel.style.transition = 'none';
-      });
-      dragHandle.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        const te = e as TouchEvent;
-        currentDragY = Math.max(0, te.touches[0].clientY - startY);
-        uiPanel.style.transform = `translateY(${currentDragY}px)`;
-      });
-      const endDrag = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        uiPanel.style.transition = '';
-        if (currentDragY > 100) {
-          closePanel();
-        } else {
-          uiPanel.style.transform = '';
-        }
-        currentDragY = 0;
-      };
-      dragHandle.addEventListener('touchend', endDrag);
-      dragHandle.addEventListener('touchcancel', endDrag);
-    }
-
-    settingsToggle?.addEventListener('click', () => {
-      if (uiPanel?.classList.contains('open')) closePanel();
-      else openPanel();
-    });
-
-    panelCloseBtn?.addEventListener('click', closePanel);
-    panelOverlay?.addEventListener('click', () => {
-      closePanel();
-      closeSearchPanel();
-    });
-
-    // Search Species Panel
-    const searchPanel = document.getElementById('search-panel');
-    const searchFab = document.getElementById('search-fab');
-    const searchPanelClose = document.getElementById('search-panel-close');
-
-    const openSearchPanel = () => {
-      searchPanel?.classList.add('open');
-      searchFab?.classList.add('active');
-      panelOverlay?.classList.add('active');
-      setTimeout(() => gbifSearch?.focus(), 150);
-    };
-
-    closeSearchPanel = () => {
-      searchPanel?.classList.remove('open');
-      searchFab?.classList.remove('active');
-      if (!uiPanel?.classList.contains('open')) {
-        panelOverlay?.classList.remove('active');
-      }
-    };
-
-    searchFab?.addEventListener('click', () => {
-      if (searchPanel?.classList.contains('open')) closeSearchPanel();
-      else openSearchPanel();
-    });
-    searchPanelClose?.addEventListener('click', closeSearchPanel);
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (searchPanel?.classList.contains('open')) closeSearchPanel();
-        else if (uiPanel?.classList.contains('open')) closePanel();
-        else if (speedDial?.classList.contains('open')) speedDial.classList.remove('open');
-      }
-    });
-
-    if (gbifToggle) {
-      gbifToggle.addEventListener('click', (e) => e.stopPropagation());
-      gbifToggle.addEventListener('change', () => {
-        gbifEnabled = gbifToggle.checked;
-        if (gbifEnabled) {
-          updateGbifLayer();
-        } else {
-          if (gbifLayer) map.removeLayer(gbifLayer);
-          vectorLayer.clearLayers();
-          vectorMarkers = [];
-          activeFilters.clear();
-          hideLegendFab();
-          if (clearPointsBtn) clearPointsBtn.classList.add('hidden');
-        }
-      });
-    }
-
+    // 11. Collapsibles & Escape key
     const collapsibles = document.querySelectorAll('.collapsible');
     collapsibles.forEach(section => {
       section.querySelector('.section-header')?.addEventListener('click', (e) => {
@@ -1380,7 +1394,22 @@ async function initMap() {
       });
     });
 
-    // Language Settings UI
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (gbifPanel?.classList.contains('open')) closeGbifPanel();
+        else if (basePopoverOpen) closeBasePopover();
+        else if (layerStack?.classList.contains('open')) closeLayerStack();
+      }
+    });
+
+    // Close base popover when clicking outside
+    document.addEventListener('click', (e) => {
+      if (basePopoverOpen && !baseLayerPopover?.contains(e.target as Node) && !baseLayerFab?.contains(e.target as Node)) {
+        closeBasePopover();
+      }
+    });
+
+    // 12. Language Settings UI
     const langChipsContainer = document.getElementById('lang-chips');
     const langSearchInput = document.getElementById('lang-search') as HTMLInputElement;
     const langDropdown = document.getElementById('lang-dropdown') as HTMLElement;
@@ -1471,15 +1500,24 @@ async function initMap() {
     renderLanguageChips();
 
     const checkGbifHealth = async () => {
-      const dot = gbifHeader?.querySelector('.status-dot');
       try {
         const testUrl = `https://api.gbif.org/v1/species/2435099`;
         const res = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
-        if (res.ok) dot?.classList.add('online'); else throw new Error();
-      } catch (e) { dot?.classList.add('offline'); }
+        if (gbifStatusDot) {
+          const dot = document.createElement('div');
+          dot.className = `status-dot ${res.ok ? 'online' : 'offline'}`;
+          gbifStatusDot.appendChild(dot);
+        }
+      } catch (e) {
+        if (gbifStatusDot) {
+          const dot = document.createElement('div');
+          dot.className = 'status-dot offline';
+          gbifStatusDot.appendChild(dot);
+        }
+      }
     };
     
-    // 6. Final Initialization
+    // 13. Final Initialization
     renderHistory();
     if (currentTaxonKey) {
       const match = currentHistory.find(h => h.key === currentTaxonKey);
@@ -1490,6 +1528,7 @@ async function initMap() {
     checkGbifHealth();
     validateAllPalettes(currentShape);
     updateGbifLayer();
+    updateGbifFabState();
     LucideIcons.createIcons({ icons: iconsObject });
 
     // Welcome card (first visit only)
@@ -1508,7 +1547,7 @@ async function initMap() {
     }
 
     // Reset All Settings
-    const ALL_STORAGE_KEYS = [STORAGE_KEY_CENTER, STORAGE_KEY_ZOOM, STORAGE_KEY_LANGS, STORAGE_KEY_BASE, 'gbif_history', WELCOME_KEY];
+    const ALL_STORAGE_KEYS = [STORAGE_KEY_CENTER, STORAGE_KEY_ZOOM, STORAGE_KEY_LANGS, STORAGE_KEY_BASE, STORAGE_KEY_OVERLAYS, 'gbif_history', WELCOME_KEY];
     const resetBtn = document.getElementById('reset-all-btn');
     if (resetBtn) {
       let confirmPending = false;

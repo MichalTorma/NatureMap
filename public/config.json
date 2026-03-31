@@ -3,7 +3,7 @@
     "center": [37.7749, -122.4194],
     "zoom": 13
   },
-  "layers": [
+  "baseLayers": [
     {
       "id": "osm",
       "type": "xyz",
@@ -40,6 +40,17 @@
       }
     },
     {
+      "id": "norgeskart",
+      "type": "xyz",
+      "label": "Norgeskart",
+      "icon": "MountainSnow",
+      "url": "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png",
+      "options": {
+        "maxZoom": 18,
+        "attribution": "&copy; <a href='https://kartverket.no'>Kartverket</a>"
+      }
+    },
+    {
       "id": "satellite",
       "type": "xyz",
       "label": "Satellite",
@@ -47,19 +58,6 @@
       "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       "options": {
         "attribution": "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-      }
-    },
-    {
-      "id": "clouds",
-      "type": "wms",
-      "label": "Clouds",
-      "icon": "Cloud",
-      "url": "https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi",
-      "options": {
-        "layers": "nexrad-n0r-900913",
-        "format": "image/png",
-        "transparent": true,
-        "attribution": "Weather data &copy; IEM Nexrad"
       }
     },
     {
@@ -72,6 +70,21 @@
         "attribution": "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/attributions'>CARTO</a>",
         "subdomains": "abcd",
         "maxZoom": 20
+      }
+    }
+  ],
+  "overlays": [
+    {
+      "id": "clouds",
+      "type": "wms",
+      "label": "Weather Radar",
+      "icon": "Cloud",
+      "url": "https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi",
+      "options": {
+        "layers": "nexrad-n0r-900913",
+        "format": "image/png",
+        "transparent": true,
+        "attribution": "Weather data &copy; IEM Nexrad"
       }
     }
   ],
