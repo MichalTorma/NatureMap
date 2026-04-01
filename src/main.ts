@@ -223,7 +223,7 @@ async function initMap() {
         if (r.bottom > mr.bottom - p.b) dy += (mr.bottom - p.b) - r.bottom;
 
         if (dx !== 0 || dy !== 0) {
-          map.panBy(L.point(dx, dy), { animate: true, duration: 0.28 });
+          map.panBy(L.point(-dx, -dy), { animate: true, duration: 0.28 });
           map.once('moveend', () => requestAnimationFrame(step));
           return;
         }
