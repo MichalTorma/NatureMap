@@ -21,10 +21,21 @@
     <!-- Dynamic Vector Taxonomy Legend -->
     <div id="vector-legend" class="vector-legend">
       <div class="legend-header">
-        <h3>Taxonomy</h3>
-        <button id="legend-close" class="panel-close-btn" aria-label="Close legend">
-          <i data-lucide="x"></i>
-        </button>
+        <div class="legend-title-row">
+          <h3>Taxonomy</h3>
+          <button id="legend-close" class="panel-close-btn" aria-label="Close legend">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="legend-search-container">
+          <div class="legend-search-box">
+            <i data-lucide="search" class="search-icon"></i>
+            <input type="text" id="legend-search-input" placeholder="Search species or rank..." autocomplete="off">
+            <button id="legend-search-clear" class="search-clear-btn hidden" title="Clear search">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+        </div>
       </div>
       <div id="legend-lang-bar" class="legend-lang-bar" aria-label="Display language for names"></div>
       <div id="vector-legend-body" class="legend-body"></div>
