@@ -272,6 +272,8 @@ async function initMap() {
       if (baseLayerFab && spec) {
         baseLayerFab.innerHTML = getIconSvg(spec.icon);
         baseLayerFab.title = spec.label;
+        const nameEl = document.getElementById('active-base-layer-name');
+        if (nameEl) nameEl.textContent = spec.label;
       }
     };
 
@@ -338,27 +340,62 @@ async function initMap() {
       if (isActive) layer.addTo(map);
 
       if (overlayFabContainer) {
+        const row = document.createElement('div');
+        row.className = 'layer-row-item layer-stack-item';
+        
+        // Control Chip
+        const controlChip = document.createElement('div');
+        controlChip.className = 'layer-control-chip chip';
+        const toggle = document.createElement('label');
+        toggle.className = 'mini-toggle';
+        toggle.title = `Toggle ${spec.label}`;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = isActive;
+        const track = document.createElement('span');
+        track.className = 'mini-toggle-track';
+        toggle.appendChild(input);
+        toggle.appendChild(track);
+        controlChip.appendChild(toggle);
+
+        // Name Chip
+        const nameChip = document.createElement('div');
+        nameChip.className = 'layer-name-chip chip';
+        const name = document.createElement('span');
+        name.className = 'layer-name';
+        name.textContent = spec.label;
+        nameChip.appendChild(name);
+        
         const btn = document.createElement('button');
-        btn.className = `layer-fab overlay-fab layer-stack-item ${isActive ? 'active' : ''}`;
+        btn.className = `layer-fab overlay-fab ${isActive ? 'active' : ''}`;
         btn.setAttribute('data-overlay', spec.id);
-        btn.setAttribute('aria-label', spec.label);
-        btn.title = spec.label;
+        btn.title = `${spec.label} Settings`;
         btn.innerHTML = getIconSvg(spec.icon);
-        btn.addEventListener('click', () => {
+        
+        const toggleLayer = () => {
           const nowActive = activeOverlayIds.has(spec.id);
           if (nowActive) {
             map.removeLayer(layer);
             activeOverlayIds.delete(spec.id);
             btn.classList.remove('active');
+            input.checked = false;
           } else {
             layer.addTo(map);
             activeOverlayIds.add(spec.id);
             btn.classList.add('active');
+            input.checked = true;
           }
           localStorage.setItem(STORAGE_KEY_OVERLAYS, JSON.stringify(Array.from(activeOverlayIds)));
           syncStateToURL();
-        });
-        overlayFabContainer.appendChild(btn);
+        };
+
+        btn.addEventListener('click', toggleLayer);
+        input.addEventListener('change', toggleLayer);
+        
+        row.appendChild(controlChip);
+        row.appendChild(nameChip);
+        row.appendChild(btn);
+        overlayFabContainer.appendChild(row);
       }
     });
 
@@ -442,24 +479,35 @@ async function initMap() {
       gbifFab?.classList.toggle('active', gbifEnabled);
     };
 
-    if (gbifToggle) {
-      gbifToggle.addEventListener('click', (e) => e.stopPropagation());
-      gbifToggle.addEventListener('change', () => {
-        gbifEnabled = gbifToggle.checked;
-        updateGbifFabState();
-        if (gbifEnabled) {
-          updateGbifLayer();
-        } else {
-          if (gbifLayer) map.removeLayer(gbifLayer);
-          vectorLayer.clearLayers();
-          vectorMarkers = [];
-          activeFilters.clear();
-          hideLegendFab();
-          if (clearPointsBtn) clearPointsBtn.classList.add('hidden');
-          if (searchAreaBtn) searchAreaBtn.classList.remove('hidden');
-        }
-      });
-    }
+    const gbifMenuToggle = document.getElementById('gbif-menu-toggle') as HTMLInputElement;
+
+    const handleGbifToggle = (source: HTMLInputElement) => {
+      gbifEnabled = source.checked;
+      if (gbifToggle) gbifToggle.checked = gbifEnabled;
+      if (gbifMenuToggle) gbifMenuToggle.checked = gbifEnabled;
+      
+      updateGbifFabState();
+      if (gbifEnabled) {
+        updateGbifLayer();
+      } else {
+        if (gbifLayer) map.removeLayer(gbifLayer);
+        // @ts-ignore
+        if (typeof vectorLayer !== 'undefined') vectorLayer.clearLayers();
+        // @ts-ignore
+        vectorMarkers = [];
+        // @ts-ignore
+        if (typeof activeFilters !== 'undefined') activeFilters.clear();
+        // @ts-ignore
+        if (typeof hideLegendFab === 'function') hideLegendFab();
+        if (clearPointsBtn) clearPointsBtn.classList.add('hidden');
+        if (searchAreaBtn) searchAreaBtn.classList.remove('hidden');
+      }
+    };
+
+    gbifToggle?.addEventListener('change', () => handleGbifToggle(gbifToggle));
+    gbifMenuToggle?.addEventListener('change', () => handleGbifToggle(gbifMenuToggle));
+    gbifToggle?.addEventListener('click', (e) => e.stopPropagation());
+    gbifMenuToggle?.addEventListener('click', (e) => e.stopPropagation());
 
     // 7. GBIF Biodiversity Core Logic
 

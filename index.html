@@ -49,13 +49,33 @@
       </button>
       <div class="menu-container">
         <div class="layer-stack-items">
-          <button id="gbif-fab" class="layer-fab gbif-fab active layer-stack-item" aria-label="Biodiversity" title="Biodiversity">
-            <i data-lucide="hexagon"></i>
-          </button>
-          <div id="overlay-fabs"></div>
-          <button id="base-layer-fab" class="layer-fab base-fab layer-stack-item" aria-label="Base Layer" title="Base Layer">
-            <i data-lucide="map"></i>
-          </button>
+          <!-- GBIF Quick Control Row -->
+          <div class="layer-row-item layer-stack-item">
+            <div class="layer-control-chip chip">
+              <label class="mini-toggle" title="Toggle biodiversity layer">
+                <input type="checkbox" id="gbif-menu-toggle" checked>
+                <span class="mini-toggle-track"></span>
+              </label>
+            </div>
+            <div class="layer-name-chip chip">
+              <span class="layer-name">Biodiversity</span>
+            </div>
+            <button id="gbif-fab" class="layer-fab gbif-fab active" aria-label="Biodiversity" title="Biodiversity Settings">
+              <i data-lucide="hexagon"></i>
+            </button>
+          </div>
+
+          <div id="overlay-fabs" class="overlay-row-container"></div>
+
+          <!-- Base Layer Display Row -->
+          <div class="layer-row-item layer-stack-item">
+            <div class="layer-name-chip chip">
+              <span id="active-base-layer-name" class="layer-name">Standard</span>
+            </div>
+            <button id="base-layer-fab" class="layer-fab base-fab" aria-label="Base Layer" title="Base Layer Selection">
+              <i data-lucide="map"></i>
+            </button>
+          </div>
         </div>
         <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
           <i data-lucide="layers" class="menu-icon"></i>
