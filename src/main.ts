@@ -256,16 +256,19 @@ async function initMap() {
       const markerSet = new Set(vectorMarkers.map(v => v.marker));
       markerSpecies.clear();
 
+      const normalizeText = (text: string | undefined | null) => 
+        text ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+
       const filteredMarkers = vectorMarkers.filter(m => {
         if (!legendSearchQuery) return true;
-        const q = legendSearchQuery.toLowerCase();
+        const q = normalizeText(legendSearchQuery);
         const terms = [
           m.taxonomy.species, m.taxonomy.genus, m.taxonomy.family,
           m.taxonomy.order, m.taxonomy.class, m.taxonomy.phylum, m.taxonomy.kingdom
-        ].map(s => s?.toLowerCase());
-        if (terms.some(t => t?.includes(q))) return true;
+        ].map(s => normalizeText(s));
+        if (terms.some(t => t.includes(q))) return true;
         const common = vnCache.get(m.taxonomy.speciesKey || 0) || [];
-        return common.some(vn => vn.name.toLowerCase().includes(q));
+        return common.some(vn => normalizeText(vn.name).includes(q));
       });
 
       filteredMarkers.forEach(v => markerSpecies.set(v.marker, v.taxonomy.species || v.label || 'Unknown species'));
