@@ -750,12 +750,16 @@ async function initMap() {
       gbifPanel?.classList.add('open');
       gbifFab?.classList.add('panel-open');
       panelOverlay?.classList.add('active');
+      document.body.classList.add('panel-active');
     };
     const closeGbifPanel = () => {
       gbifPanel?.classList.remove('open');
       gbifFab?.classList.remove('panel-open');
       if (panelOverlay) panelOverlay.classList.remove('active');
       if (gbifPanel) gbifPanel.style.transform = '';
+      if (!vectorLegend?.classList.contains('open')) {
+        document.body.classList.remove('panel-active');
+      }
     };
 
     gbifFab?.addEventListener('click', (e) => {
@@ -1708,10 +1712,14 @@ async function initMap() {
     const openLegend = () => {
       vectorLegend?.classList.add('open');
       legendToggle?.classList.add('active');
+      document.body.classList.add('panel-active');
     };
     const closeLegend = () => {
       vectorLegend?.classList.remove('open');
       legendToggle?.classList.remove('active');
+      if (!gbifPanel?.classList.contains('open')) {
+        document.body.classList.remove('panel-active');
+      }
     };
     const showLegendFab = (count: number) => {
       legendToggle?.classList.remove('hidden');
