@@ -1098,6 +1098,60 @@ async function initMap() {
       }
     };
 
+    // Wikidata Image Resolver
+    const wikidataCache = new Map<number, { imgUrl: string | null, wikiUrl: string } | null>();
+    const resolveWikidataInfo = async (taxonKey: number): Promise<{ imgUrl: string | null, wikiUrl: string } | null> => {
+      if (wikidataCache.has(taxonKey)) return wikidataCache.get(taxonKey)!;
+      try {
+        const url = `https://www.wikidata.org/w/api.php?action=query&prop=pageimages|info&inprop=url&generator=search&gsrsearch=haswbstatement:P846=${taxonKey}&piprop=thumbnail&pithumbsize=600&format=json&origin=*`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const pages = data.query?.pages;
+        if (!pages) {
+          console.warn(`[wikidata] No entity found for GBIF taxonKey: ${taxonKey}`);
+          wikidataCache.set(taxonKey, null);
+          return null;
+        }
+        const pageId = Object.keys(pages)[0];
+        const page = pages[pageId];
+        if (!page) {
+          wikidataCache.set(taxonKey, null);
+          return null;
+        }
+        const imgUrl = page.thumbnail?.source || null;
+        if (!imgUrl) console.info(`[wikidata] Entity found (${page.title}) but lacks P18 image for taxonKey: ${taxonKey}`);
+        let wikiUrl = page.fullurl || `https://www.wikidata.org/wiki/${page.title}`;
+        
+        try {
+          const sites = [...new Set([...userLanguages, 'en'])].map(l => l + 'wiki').join('|');
+          const slRes = await fetch(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${page.title}&props=sitelinks/urls&sitefilter=${sites}&format=json&origin=*`);
+          if (slRes.ok) {
+            const slData = await slRes.json();
+            const sitelinks = slData.entities?.[page.title]?.sitelinks;
+            if (sitelinks) {
+              for (const lang of [...userLanguages, 'en']) {
+                if (sitelinks[lang + 'wiki']?.url) {
+                  wikiUrl = sitelinks[lang + 'wiki'].url;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          // Fallback to wikidata 
+        }
+        
+        const result = { imgUrl, wikiUrl };
+        wikidataCache.set(taxonKey, result);
+        return result;
+      } catch (e) {
+        console.error('[wikidata] fetch failed', { taxonKey, error: e });
+        wikidataCache.set(taxonKey, null);
+        return null;
+      }
+    };
+
     // Style Validation Logic
     const checkStyleCapability = async (shape: string, palette: string): Promise<boolean> => {
       const styleParam = resolveGbifStyle(palette, shape);
@@ -1869,7 +1923,11 @@ async function initMap() {
 
               const popupHtml = `
                 <div class="vector-popup">
-                  ${imgHtml}
+                  <div class="popup-image-container">
+                    ${imgHtml}
+                    <div class="image-source-badge">Observation</div>
+                    <button class="switch-image-btn hidden" title="Switch Image Source">${getIconSvg('repeat')}</button>
+                  </div>
                   <div class="title">${occ.scientificName || 'Unknown Species'}</div>
                   <div class="vernacular-popup"></div>
                   <div class="popup-details">
@@ -1881,6 +1939,7 @@ async function initMap() {
                   <div class="popup-links">
                     <a href="${gbifUrl}" target="_blank" rel="noopener">${getIconSvg('external-link')} GBIF</a>
                     ${sourceHtml}
+                    <a href="#" class="wiki-link hidden" target="_blank" rel="noopener">${getIconSvg('book-open')} Wiki</a>
                   </div>
                 </div>
               `;
@@ -1890,7 +1949,75 @@ async function initMap() {
               marker.on('popupopen', async () => {
                 const popupEl = marker.getPopup()?.getElement();
                 if (!popupEl) return;
-                if (hasImage) {
+
+                const sciName = occ.scientificName || '';
+                const imageContainer = popupEl.querySelector('.popup-image-container') as HTMLElement;
+                const badge = popupEl.querySelector('.image-source-badge') as HTMLElement;
+                const switchBtn = popupEl.querySelector('.switch-image-btn') as HTMLElement;
+                const wikiLink = popupEl.querySelector('.wiki-link') as HTMLAnchorElement;
+                
+                let wikimediaImgUrl: string | null = null;
+                let wikidataUrl: string | null = null;
+                let currentSource: 'obs' | 'wiki' = hasImage ? 'obs' : 'wiki';
+
+                // Initial Wikidata check
+                if (popupTaxonKeys.length > 0) {
+                  for (const key of popupTaxonKeys) {
+                    const wikiInfo = await resolveWikidataInfo(key);
+                    if (wikiInfo) {
+                      wikimediaImgUrl = wikiInfo.imgUrl;
+                      wikidataUrl = wikiInfo.wikiUrl;
+                      break;
+                    }
+                  }
+
+                  if (wikidataUrl) {
+                    if (wikiLink) {
+                      wikiLink.href = wikidataUrl;
+                      wikiLink.classList.remove('hidden');
+                    }
+                  }
+
+                  if (wikimediaImgUrl) {
+                    if (!hasImage) {
+                      // If no observation image, show wiki immediately
+                      const img = document.createElement('img');
+                      img.src = wikimediaImgUrl;
+                      img.alt = sciName;
+                      img.loading = 'lazy';
+                      img.onload = () => scheduleVectorPopupFit(marker);
+                      img.onerror = () => img.remove();
+                      imageContainer?.prepend(img);
+                      if (badge) badge.textContent = 'Wikimedia';
+                      currentSource = 'wiki';
+                    } else {
+                      // Show switch button if both exist
+                      if (switchBtn) switchBtn.classList.remove('hidden');
+                    }
+                  }
+                }
+
+                if (switchBtn && hasImage && wikimediaImgUrl) {
+                  switchBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const imgEl = imageContainer?.querySelector('img') as HTMLImageElement | null;
+                    if (!imgEl) return;
+
+                    if (currentSource === 'obs') {
+                      imgEl.src = wikimediaImgUrl!;
+                      if (badge) badge.textContent = 'Wikimedia';
+                      currentSource = 'wiki';
+                    } else {
+                      imgEl.src = thumbUrl;
+                      if (badge) badge.textContent = 'Observation';
+                      currentSource = 'obs';
+                    }
+                    scheduleVectorPopupFit(marker);
+                  };
+                }
+
+                if (hasImage && currentSource === 'obs') {
                   const imgEl = popupEl.querySelector('img');
                   if (imgEl) {
                     if (imgEl.complete) scheduleVectorPopupFit(marker);
@@ -1899,6 +2026,7 @@ async function initMap() {
                     }, { once: true });
                   } else scheduleVectorPopupFit(marker);
                 } else scheduleVectorPopupFit(marker);
+
                 if (popupTaxonKeys.length > 0) {
                   const el = popupEl.querySelector('.vernacular-popup') as HTMLElement | null;
                   const langSig = userLanguages.join(',');
