@@ -1723,13 +1723,48 @@ async function initMap() {
       refreshTaxonomyLegendLang = null;
     };
 
+    // 9b. Legend Resize Logic
+    const resizeHandle = document.getElementById('legend-resize-handle');
+    const STORAGE_KEY_LEGEND_WIDTH = 'mymap_legend_width';
+    let isResizing = false;
+
+    if (vectorLegend && resizeHandle) {
+      const savedWidth = localStorage.getItem(STORAGE_KEY_LEGEND_WIDTH);
+      if (savedWidth && window.innerWidth > 768) {
+        vectorLegend.style.width = `${savedWidth}px`;
+      }
+      
+      resizeHandle.addEventListener('mousedown', (e) => {
+        if (window.innerWidth <= 768) return;
+        isResizing = true;
+        document.body.classList.add('legend-resizing');
+        vectorLegend.classList.add('legend-resizing');
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isResizing || !vectorLegend) return;
+        const newWidth = window.innerWidth - e.clientX - 80;
+        if (newWidth >= 260 && newWidth <= 800) {
+          vectorLegend.style.width = `${newWidth}px`;
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isResizing && vectorLegend) {
+          isResizing = false;
+          document.body.classList.remove('legend-resizing');
+          vectorLegend.classList.remove('legend-resizing');
+          localStorage.setItem(STORAGE_KEY_LEGEND_WIDTH, vectorLegend.offsetWidth.toString());
+        }
+      });
+    }
+
     legendToggle?.addEventListener('click', () => {
       if (vectorLegend?.classList.contains('open')) closeLegend();
       else openLegend();
     });
     legendClose?.addEventListener('click', closeLegend);
-
-
 
 
 
