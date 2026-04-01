@@ -2218,7 +2218,14 @@ body {
   z-index: 99999;
   pointer-events: auto;
   animation: fadeInHoverCard 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  filter: drop-shadow(0 15px 35px rgba(0,0,0,0.6));
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(0,0,0,0.6);
+  padding: 10px;
 }
 .taxon-hover-card.hidden { display: none; }
 
@@ -2227,6 +2234,8 @@ body {
   max-width: 280px;
   min-width: 200px;
   box-shadow: none !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 .hover-img-container { margin-bottom: 10px; min-height: 40px; }
