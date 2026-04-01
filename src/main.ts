@@ -200,7 +200,6 @@ async function initMap() {
 
       const step = () => {
         if (!popup.isOpen() || gen !== vectorPopupFitGeneration || passes++ > maxPasses) return;
-        popup.update();
         const r = el.getBoundingClientRect();
         const availW = mr.width - p.l - p.r;
         const availH = mr.height - p.t - p.b;
@@ -606,15 +605,18 @@ async function initMap() {
           const res = await fetch(
             `https://api.gbif.org/v1/species/${taxonKey}/vernacularNames?limit=200`
           );
+          if (!res.ok) throw new Error(`GBIF vernacularNames ${res.status} for taxon ${taxonKey}`);
           const data = await res.json();
           const allNames: VnName[] = [];
           for (const vn of data.results || []) {
             if (!vn.vernacularName || !vn.language) continue;
-            const iso1 = resolveIso1(vn.language);
+            const langRaw = String(vn.language).toLowerCase();
+            const iso1 = langLookup1[langRaw] ? langRaw : resolveIso1(langRaw);
             if (iso1) allNames.push({ lang: iso1, name: vn.vernacularName });
           }
           vnCache.set(taxonKey, allNames);
-        } catch {
+        } catch (e) {
+          console.error('[vernacular] fetch failed', { taxonKey, error: e });
           vnCache.set(taxonKey, []);
         }
       }
@@ -625,7 +627,9 @@ async function initMap() {
         const match = all.find(n => n.lang === lc && !seen.has(lc));
         if (match) { result.push(match); seen.add(lc); }
       }
-      return result;
+      if (result.length > 0) return result;
+      // Offensive fallback: return something rather than silently showing nothing.
+      return all.slice(0, 4);
     };
 
     const prefetchTaxonVernaculars = async (taxonKeys: number[]) => {
@@ -1588,7 +1592,8 @@ async function initMap() {
                 </div>
               `;
               marker.bindPopup(popupHtml, { maxWidth: 300, autoPan: false });
-              const popupTaxonKey = occ.speciesKey || occ.taxonKey;
+              const popupTaxonKeys = [occ.speciesKey, occ.acceptedTaxonKey, occ.taxonKey]
+                .filter((k: unknown): k is number => typeof k === 'number' && k > 0);
               marker.on('popupopen', async () => {
                 const popupEl = marker.getPopup()?.getElement();
                 if (!popupEl) return;
@@ -1597,21 +1602,40 @@ async function initMap() {
                   if (imgEl) {
                     if (imgEl.complete) scheduleVectorPopupFit(marker);
                     else imgEl.addEventListener('load', () => {
-                      marker.getPopup()?.update();
                       scheduleVectorPopupFit(marker);
                     }, { once: true });
                   } else scheduleVectorPopupFit(marker);
                 } else scheduleVectorPopupFit(marker);
-                if (popupTaxonKey) {
-                  const el = popupEl.querySelector('.vernacular-popup');
-                  if (el && !el.innerHTML.trim()) {
-                    const names = await resolveVernacularNames(popupTaxonKey);
+                if (popupTaxonKeys.length > 0) {
+                  const el = popupEl.querySelector('.vernacular-popup') as HTMLElement | null;
+                  const langSig = userLanguages.join(',');
+                  if (el) {
+                    // Always refresh on popup open to avoid stale/lazy-state mismatches.
+                    el.innerHTML = `<span class="lang-tag">...</span> Loading names`;
+                    let names: VnName[] = [];
+                    for (const k of popupTaxonKeys) {
+                      names = await resolveVernacularNames(k);
+                      if (names.length > 0) break;
+                    }
                     if (names.length > 0) {
                       el.innerHTML = names.map(n =>
                         `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`
                       ).join(' · ');
+                    } else {
+                      console.warn('[vernacular] no names for occurrence', {
+                        occurrenceKey: occ.key,
+                        taxonKeysTried: popupTaxonKeys,
+                        userLanguages,
+                        langSig
+                      });
+                      el.innerHTML = `<span class="lang-tag">INFO</span> No vernacular names available`;
                     }
+                    el.dataset.langSig = langSig;
+                  } else {
+                    console.error('[vernacular] popup element missing .vernacular-popup node', { occurrenceKey: occ.key });
                   }
+                } else {
+                  console.warn('[vernacular] no taxon key on occurrence', { occurrenceKey: occ.key });
                 }
                 if (datasetKey) {
                   const dsEl = popupEl.querySelector('.popup-dataset');
@@ -1624,7 +1648,6 @@ async function initMap() {
                     }
                   }
                 }
-                marker.getPopup()?.update();
                 scheduleVectorPopupFit(marker);
               });
               
