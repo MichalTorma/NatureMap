@@ -73,21 +73,7 @@
       }
     }
   ],
-  "overlays": [
-    {
-      "id": "clouds",
-      "type": "wms",
-      "label": "Weather Radar",
-      "icon": "Cloud",
-      "url": "https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi",
-      "options": {
-        "layers": "nexrad-n0r-900913",
-        "format": "image/png",
-        "transparent": true,
-        "attribution": "Weather data &copy; IEM Nexrad"
-      }
-    }
-  ],
+  "overlays": [],
   "gbif": {
     "defaultStyle": "hex",
     "availableStyles": [

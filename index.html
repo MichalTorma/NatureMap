@@ -37,28 +37,30 @@
     
     <!-- Layer FAB Stack -->
     <div id="layer-stack" class="layer-stack">
-      <div class="layer-stack-items">
-        <button id="gbif-fab" class="layer-fab gbif-fab active layer-stack-item" aria-label="Biodiversity" title="Biodiversity">
-          <i data-lucide="hexagon"></i>
-        </button>
-        <div id="overlay-fabs"></div>
-        <button id="base-layer-fab" class="layer-fab base-fab layer-stack-item" aria-label="Base Layer" title="Base Layer">
-          <i data-lucide="map"></i>
-        </button>
-      </div>
       <button id="legend-toggle" class="layer-fab legend-fab hidden" aria-label="Species Legend" title="Species Legend">
         <i data-lucide="list"></i>
         <span id="legend-badge" class="fab-badge">0</span>
       </button>
-      <button id="clear-points-btn" class="clear-points-fab hidden" aria-label="Clear Points" title="Clear Points">
+      <button id="clear-points-btn" class="layer-fab clear-points-fab hidden" aria-label="Clear Points" title="Clear Points">
         <i data-lucide="trash-2"></i>
       </button>
       <button id="locate-btn" class="layer-fab" aria-label="Find My Location" title="Find My Location">
         <i data-lucide="locate"></i>
       </button>
-      <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
-        <i data-lucide="layers" class="menu-icon"></i>
-      </button>
+      <div class="menu-container">
+        <div class="layer-stack-items">
+          <button id="gbif-fab" class="layer-fab gbif-fab active layer-stack-item" aria-label="Biodiversity" title="Biodiversity">
+            <i data-lucide="hexagon"></i>
+          </button>
+          <div id="overlay-fabs"></div>
+          <button id="base-layer-fab" class="layer-fab base-fab layer-stack-item" aria-label="Base Layer" title="Base Layer">
+            <i data-lucide="map"></i>
+          </button>
+        </div>
+        <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
+          <i data-lucide="layers" class="menu-icon"></i>
+        </button>
+      </div>
     </div>
 
     <!-- GBIF Settings Panel -->
