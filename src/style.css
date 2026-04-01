@@ -1677,6 +1677,23 @@ body {
 .tree-filter:hover { color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.08); }
 .tree-row.tree-selected .tree-filter { opacity: 1; color: #93c5fd; }
 
+.tree-info-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.28);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.tree-info-btn svg { width: 13px; height: 13px; }
+.tree-row:hover .tree-info-btn { opacity: 1; }
+.tree-info-btn:hover { color: #60a5fa; background: rgba(96, 165, 250, 0.15); }
+
 .tree-list {
   background: none;
   border: none;
@@ -1726,7 +1743,8 @@ body {
   flex-shrink: 0;
 }
 .tree-eye-inline,
-.tree-filter-inline {
+.tree-filter-inline,
+.tree-info-inline {
   opacity: 1 !important;
 }
 
@@ -2190,4 +2208,49 @@ body {
 .welcome-dismiss-btn:hover {
   background: #2563eb;
   transform: translateY(-1px);
+}
+
+/* =========================================
+   Taxon Hover Card
+   ========================================= */
+.taxon-hover-card {
+  position: fixed;
+  z-index: 99999;
+  pointer-events: auto;
+  animation: fadeInHoverCard 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 15px 35px rgba(0,0,0,0.6));
+}
+.taxon-hover-card.hidden { display: none; }
+
+.taxon-hover-inner {
+  margin: 0 !important;
+  max-width: 280px;
+  min-width: 200px;
+  box-shadow: none !important;
+}
+
+.hover-img-container { margin-bottom: 10px; min-height: 40px; }
+.hover-img-container img { max-height: 150px !important; }
+
+.hover-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255,255,255,0.7);
+  font-size: 0.85rem;
+  padding: 16px 0;
+}
+.hover-loading svg {
+  animation: spinHoverCard 1s linear infinite;
+  width: 18px; 
+  height: 18px;
+}
+
+@keyframes fadeInHoverCard {
+  from { opacity: 0; transform: scale(0.95) translateY(5px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes spinHoverCard {
+  100% { transform: rotate(360deg); }
 }

@@ -332,6 +332,25 @@ async function initMap() {
         const cntEl = document.createElement('span');
         cntEl.className = 'legend-count'; cntEl.textContent = String(node.count);
         row.appendChild(cntEl);
+
+        if (node.rank !== 'root' && node.taxonKey) {
+          const infoBtn = document.createElement('button');
+          infoBtn.className = 'tree-info-btn';
+          infoBtn.innerHTML = getIconSvg('info');
+          row.appendChild(infoBtn);
+          
+          infoBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // @ts-ignore - will be hoisted or defined
+            if (typeof showTaxonHoverCard === 'function') showTaxonHoverCard(infoBtn, node.taxonKey, node.name);
+          });
+          infoBtn.addEventListener('mouseenter', () => {
+            if (window.innerWidth > 768) {
+              // @ts-ignore
+              if (typeof showTaxonHoverCard === 'function') showTaxonHoverCard(infoBtn, node.taxonKey, node.name);
+            }
+          });
+        }
         container.appendChild(row);
 
         if (!isLeaf) {
@@ -427,6 +446,26 @@ async function initMap() {
                 spRow.classList.toggle('tree-selected', !on);
                 refreshVisibility();
               });
+
+              if (vm?.taxonomy.speciesKey) {
+                const spInfo = document.createElement('button');
+                spInfo.className = 'tree-info-btn tree-info-inline';
+                spInfo.innerHTML = getIconSvg('info');
+                
+                spInfo.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  // @ts-ignore
+                  if (typeof showTaxonHoverCard === 'function') showTaxonHoverCard(spInfo, vm.taxonomy.speciesKey, speciesName);
+                });
+                spInfo.addEventListener('mouseenter', () => {
+                  if (window.innerWidth > 768) {
+                    // @ts-ignore
+                    if (typeof showTaxonHoverCard === 'function') showTaxonHoverCard(spInfo, vm.taxonomy.speciesKey, speciesName);
+                  }
+                });
+                btnGroup.append(spInfo);
+              }
+
               btnGroup.append(spEye, spFilter);
               spRow.append(nameWrap, countEl, btnGroup);
               speciesPanel.appendChild(spRow);
@@ -1099,8 +1138,8 @@ async function initMap() {
     };
 
     // Wikidata Image Resolver
-    const wikidataCache = new Map<number, { imgUrl: string | null, wikiUrl: string } | null>();
-    const resolveWikidataInfo = async (taxonKey: number): Promise<{ imgUrl: string | null, wikiUrl: string } | null> => {
+    const wikidataCache = new Map<number, { imgUrl: string | null, wikiUrl: string, type: 'wikipedia' | 'wikidata' } | null>();
+    const resolveWikidataInfo = async (taxonKey: number): Promise<{ imgUrl: string | null, wikiUrl: string, type: 'wikipedia' | 'wikidata' } | null> => {
       if (wikidataCache.has(taxonKey)) return wikidataCache.get(taxonKey)!;
       try {
         const url = `https://www.wikidata.org/w/api.php?action=query&prop=pageimages|info&inprop=url&generator=search&gsrsearch=haswbstatement:P846=${taxonKey}&piprop=thumbnail&pithumbsize=600&format=json&origin=*`;
@@ -1122,6 +1161,7 @@ async function initMap() {
         const imgUrl = page.thumbnail?.source || null;
         if (!imgUrl) console.info(`[wikidata] Entity found (${page.title}) but lacks P18 image for taxonKey: ${taxonKey}`);
         let wikiUrl = page.fullurl || `https://www.wikidata.org/wiki/${page.title}`;
+        let type: 'wikipedia' | 'wikidata' = 'wikidata';
         
         try {
           const sites = [...new Set([...userLanguages, 'en'])].map(l => l + 'wiki').join('|');
@@ -1133,6 +1173,7 @@ async function initMap() {
               for (const lang of [...userLanguages, 'en']) {
                 if (sitelinks[lang + 'wiki']?.url) {
                   wikiUrl = sitelinks[lang + 'wiki'].url;
+                  type = 'wikipedia';
                   break;
                 }
               }
@@ -1142,7 +1183,7 @@ async function initMap() {
           // Fallback to wikidata 
         }
         
-        const result = { imgUrl, wikiUrl };
+        const result = { imgUrl, wikiUrl, type };
         wikidataCache.set(taxonKey, result);
         return result;
       } catch (e) {
@@ -1150,6 +1191,120 @@ async function initMap() {
         wikidataCache.set(taxonKey, null);
         return null;
       }
+    };
+
+    // Taxon Hover Card Logic
+    const hoverCardEl = document.createElement('div');
+    hoverCardEl.className = 'taxon-hover-card hidden';
+    document.body.appendChild(hoverCardEl);
+
+    let hoverCardTimeout: any;
+    let activeHoverBtn: HTMLElement | null = null;
+
+    document.addEventListener('click', (e) => {
+      if (!hoverCardEl.classList.contains('hidden') && activeHoverBtn && activeHoverBtn !== e.target && !hoverCardEl.contains(e.target as Node) && !(e.target as HTMLElement).closest('.tree-info-btn')) {
+        hoverCardEl.classList.add('hidden');
+        activeHoverBtn = null;
+      }
+    });
+
+    hoverCardEl.addEventListener('mouseenter', () => clearTimeout(hoverCardTimeout));
+    hoverCardEl.addEventListener('mouseleave', () => {
+      hoverCardEl.classList.add('hidden');
+      activeHoverBtn = null;
+    });
+
+    // We expose this so renderNode can call it
+    // @ts-ignore
+    window.showTaxonHoverCard = async (btn: HTMLElement, taxonKey: number, sciName: string) => {
+      clearTimeout(hoverCardTimeout);
+      if (activeHoverBtn === btn && !hoverCardEl.classList.contains('hidden')) {
+        // Toggle on mobile if already open
+        if (window.innerWidth <= 768) {
+           hoverCardEl.classList.add('hidden');
+           activeHoverBtn = null;
+        }
+        return;
+      }
+      activeHoverBtn = btn;
+      const rect = btn.getBoundingClientRect();
+      const topPos = rect.top - 10;
+      
+      // Calculate right/left position. Wait, it's better if it floats left of the legend panel
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        hoverCardEl.style.top = `auto`;
+        hoverCardEl.style.bottom = `${window.innerHeight - rect.top + 10}px`;
+        hoverCardEl.style.right = `16px`;
+        hoverCardEl.style.left = `16px`;
+      } else {
+        hoverCardEl.style.top = `${Math.max(10, topPos)}px`;
+        hoverCardEl.style.right = `${window.innerWidth - rect.left + btn.offsetWidth + 8}px`; // Pop to the left of the button
+        hoverCardEl.style.left = `auto`;
+        hoverCardEl.style.bottom = `auto`;
+      }
+      
+      hoverCardEl.innerHTML = `
+        <div class="vector-popup taxon-hover-inner">
+          <div class="hover-loading">
+             ${getIconSvg('loader-2')}
+             <span>Loading info...</span>
+          </div>
+        </div>
+      `;
+      hoverCardEl.classList.remove('hidden');
+
+      if (!taxonKey) {
+        hoverCardEl.innerHTML = `<div class="vector-popup taxon-hover-inner"><div class="title">${sciName}</div></div>`;
+        return;
+      }
+
+      const names = await resolveVernacularNames(taxonKey);
+      const wikiInfo = await resolveWikidataInfo(taxonKey);
+      
+      if (activeHoverBtn !== btn) return;
+
+      const vnamesHtml = names.length > 0 
+        ? names.map(n => `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`).join(' · ')
+        : `<span class="lang-tag">INFO</span> No vernacular names`;
+
+      let imgHtml = '';
+      let wikiLinkHtml = '';
+
+      if (wikiInfo) {
+        if (wikiInfo.imgUrl) {
+          imgHtml = `<img src="${wikiInfo.imgUrl}" alt="${sciName}" loading="lazy" class="hover-card-img" onerror="this.style.display='none'">`;
+        }
+        wikiLinkHtml = `<a href="${wikiInfo.wikiUrl}" class="wiki-link" target="_blank" rel="noopener">${getIconSvg(wikiInfo.type === 'wikidata' ? 'database' : 'book-open')} ${wikiInfo.type === 'wikidata' ? 'Wikidata' : 'Wikipedia'}</a>`;
+      }
+
+      hoverCardEl.innerHTML = `
+        <div class="vector-popup taxon-hover-inner">
+           ${imgHtml ? `<div class="popup-image-container hover-img-container">${imgHtml}</div>` : ''}
+           <div class="title">${sciName}</div>
+           <div class="vernacular-popup">${vnamesHtml}</div>
+           <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0;" />
+           <div class="popup-links">${wikiLinkHtml}</div>
+        </div>
+      `;
+      
+      // Auto-correct position if it goes off bottom
+      if (!isMobile) {
+        const cardRect = hoverCardEl.getBoundingClientRect();
+        if (cardRect.bottom > window.innerHeight) {
+          hoverCardEl.style.top = `${window.innerHeight - cardRect.height - 10}px`;
+        }
+      }
+    };
+    
+    // @ts-ignore
+    window.hideTaxonHoverCard = (btn: HTMLElement) => {
+      hoverCardTimeout = setTimeout(() => {
+        if (activeHoverBtn === btn) {
+           hoverCardEl.classList.add('hidden');
+           activeHoverBtn = null;
+        }
+      }, 200);
     };
 
     // Style Validation Logic
@@ -1958,6 +2113,7 @@ async function initMap() {
                 
                 let wikimediaImgUrl: string | null = null;
                 let wikidataUrl: string | null = null;
+                let wikiType: 'wikipedia' | 'wikidata' = 'wikidata';
                 let currentSource: 'obs' | 'wiki' = hasImage ? 'obs' : 'wiki';
 
                 // Initial Wikidata check
@@ -1967,6 +2123,7 @@ async function initMap() {
                     if (wikiInfo) {
                       wikimediaImgUrl = wikiInfo.imgUrl;
                       wikidataUrl = wikiInfo.wikiUrl;
+                      wikiType = wikiInfo.type;
                       break;
                     }
                   }
@@ -1974,6 +2131,7 @@ async function initMap() {
                   if (wikidataUrl) {
                     if (wikiLink) {
                       wikiLink.href = wikidataUrl;
+                      wikiLink.innerHTML = `${getIconSvg(wikiType === 'wikidata' ? 'database' : 'book-open')} ${wikiType === 'wikidata' ? 'Wikidata' : 'Wikipedia'}`;
                       wikiLink.classList.remove('hidden');
                     }
                   }
