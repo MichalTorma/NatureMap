@@ -1,0 +1,281 @@
+/* ============ Leaflet Overrides ============ */
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(4px);
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 0.65rem !important;
+}
+
+/* ============ Vector Search & Markers ============ */
+.vector-controls {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.vector-controls.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -20px);
+}
+
+.search-area-btn {
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--panel-border);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 40px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  transition: all 0.2s;
+}
+
+.search-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent-color);
+  width: 0%;
+  transition: width 0.3s ease-out;
+  box-shadow: 0 0 10px var(--accent-color);
+  z-index: 0;
+}
+
+.search-area-btn i, .search-area-btn span {
+  position: relative;
+  z-index: 1;
+}
+
+.search-area-btn:hover { background: var(--accent-color); transform: scale(1.05); }
+.search-area-btn.hidden { opacity: 0; pointer-events: none; transform: scale(0.8); }
+
+.user-location-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  animation: pulse-dot 2s ease-out infinite;
+}
+
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  70% { box-shadow: 0 0 0 14px rgba(59, 130, 246, 0), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0), 0 2px 8px rgba(0, 0, 0, 0.4); }
+}
+
+/* Taxonomy Markers */
+.custom-cluster-icon {
+  background: transparent !important;
+  border: none !important;
+}
+.cluster-donut {
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.cluster-donut:hover { transform: scale(1.15); }
+.leaflet-cluster-anim .leaflet-marker-icon,
+.leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.taxa-marker {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: 2px solid white;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  transition: transform 0.2s;
+}
+.taxa-marker:hover {
+  transform: scale(1.15);
+  z-index: 1000 !important;
+}
+.taxa-marker i, .taxa-marker > svg { width: 18px; height: 18px; }
+
+.marker-photo-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.marker-photo-badge svg { width: 9px; height: 9px; }
+
+.taxa-marker.aves { background: #3b82f6; }
+.taxa-marker.mammalia { background: #f97316; }
+.taxa-marker.plantae { background: #22c55e; }
+.taxa-marker.insecta { background: #a855f7; }
+.taxa-marker.fungi { background: #84cc16; }
+.taxa-marker.reptilia { background: #14b8a6; }
+.taxa-marker.amphibia { background: #06b6d4; }
+.taxa-marker.actinopterygii { background: #2563eb; }
+.taxa-marker.arachnida { background: #eab308; }
+.taxa-marker.gastropoda { background: #ec4899; }
+.taxa-marker.malacostraca { background: #f43f5e; }
+.taxa-marker.mollusca { background: #d946ef; }
+.taxa-marker.default { background: #64748b; }
+
+/* Custom Vector Popup */
+.leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(10px);
+  color: white !important;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+}
+.leaflet-popup-tip { background: rgba(15, 23, 42, 0.95) !important; }
+.vector-popup { text-align: center; font-family: 'Inter', sans-serif; min-width: 180px; max-width: 260px; }
+.vector-popup img { width: 100%; border-radius: 8px; margin-bottom: 8px; max-height: 180px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+
+.popup-image-container {
+  position: relative;
+  width: 100%;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+.popup-image-container img {
+  width: 100% !important;
+  max-height: 180px !important;
+  object-fit: cover !important;
+  display: block !important;
+  margin-bottom: 0 !important;
+  border: none !important;
+}
+.image-source-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 6;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.switch-image-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.switch-image-btn:hover {
+  background: var(--accent-color);
+  transform: scale(1.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.switch-image-btn:active { transform: scale(0.95); }
+.switch-image-btn svg { width: 14px; height: 14px; }
+.switch-image-btn.hidden { display: none; }
+.wiki-link.hidden { display: none; }
+.vector-popup .title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; color: #fff; }
+.vector-popup .vernacular-popup { margin-bottom: 6px; }
+.vector-popup .popup-details {
+  text-align: left;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.vector-popup .popup-detail {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  word-break: break-word;
+}
+.vector-popup .popup-detail svg { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.6; }
+.vector-popup .popup-detail a { color: #60a5fa; text-decoration: none; }
+.vector-popup .popup-detail a:hover { text-decoration: underline; }
+.vector-popup .popup-links {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.vector-popup .popup-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  transition: all 0.2s;
+}
+.vector-popup .popup-links a:hover { background: rgba(96, 165, 250, 0.2); color: #93bbfd; }
+.vector-popup .popup-links a svg { width: 12px; height: 12px; }

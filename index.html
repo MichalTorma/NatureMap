@@ -88,6 +88,18 @@
               <i data-lucide="map"></i>
             </button>
           </div>
+
+          <div class="layer-separator"></div>
+
+          <!-- Language Settings Row -->
+          <div class="layer-row-item layer-stack-item">
+            <div class="layer-name-chip chip">
+              <span class="layer-name">Global Languages</span>
+            </div>
+            <button id="lang-fab" class="layer-fab lang-fab" aria-label="Languages" title="Language Configuration">
+              <i data-lucide="languages"></i>
+            </button>
+          </div>
         </div>
         <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
           <i data-lucide="layers" class="menu-icon"></i>
@@ -130,71 +142,94 @@
 
         <div class="ui-section collapsible active" id="gbif-style-section">
           <div class="section-header">
-            <h2>VISUALIZATION</h2>
+            <h2>STYLE EXPLORER</h2>
             <i data-lucide="chevron-down" class="chevron"></i>
           </div>
           <div class="section-content">
             <div class="filter-controls">
-              <div class="control-group">
-                <span class="label">Shape</span>
-                <div class="picker-grid" id="gbif-shape-picker">
-                  <button class="picker-btn active" data-shape="hex" title="Hexagonal Grid" aria-label="Hexagonal grid visualization">
-                    <i data-lucide="hexagon"></i>
-                  </button>
-                  <button class="picker-btn" data-shape="square" title="Square Grid" aria-label="Square grid visualization">
-                    <i data-lucide="layout-grid"></i>
-                  </button>
-                  <button class="picker-btn" data-shape="point" title="Individual Records" aria-label="Individual point records">
-                    <i data-lucide="map-pin"></i>
-                  </button>
-                  <button class="picker-btn" data-shape="heatmap" title="Density Heatmap" aria-label="Density heatmap visualization">
-                    <i data-lucide="wind"></i>
-                  </button>
-                </div>
-              </div>
-              <div class="control-group">
-                <div class="label-row">
-                  <span class="label">Color Palette</span>
-                </div>
-                <div class="palette-picker" id="gbif-palette-picker">
-                  <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic" aria-label="Classic palette"><div class="badge"></div></button>
-                  <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest" aria-label="Forest palette"><div class="badge"></div></button>
-                  <button class="palette-btn" data-palette="blue" style="--color-main: #90caf9; --color-sec: #0d47a1" title="Ocean" aria-label="Ocean palette"><div class="badge"></div></button>
-                  <button class="palette-btn" data-palette="orange" style="--color-main: #ffcc80; --color-sec: #e65100" title="Fire" aria-label="Fire palette"><div class="badge"></div></button>
-                  <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #ce93d8; --color-sec: #4a148c" title="Royal" aria-label="Royal palette"><div class="badge"></div></button>
-                </div>
-              </div>
-              <div class="advanced-section">
-                <div class="advanced-header" id="advanced-toggle">
-                  <span>Scientific Tuning</span>
-                  <i data-lucide="settings-2"></i>
-                </div>
-                <div class="advanced-drawer" id="advanced-drawer" style="display: none;">
-                  <div class="control-group">
-                    <div class="label-row" style="margin-bottom: 8px;">
-                      <span class="label" title="How the grid visually responds when zooming the map">Scale Behavior</span>
-                    </div>
-                    <div id="gbif-scale-mode" class="button-toggle-group">
-                      <button class="toggle-btn active" data-mode="static" title="Static visual size">Static Area</button>
-                      <button class="toggle-btn" data-mode="geographic" title="Geo-locked boundaries">Geo Locked</button>
-                    </div>
+              
+              <!-- Rendering Modes (Dynamic Sub-options) -->
+              <div class="style-modes-container" id="gbif-mode-picker">
+                  <div class="label">Rendering Shape</div>
+                  <div class="mode-bar">
+                    <button class="mode-btn active" data-mode="heatmap" title="Heatmap"><i data-lucide="wind"></i></button>
+                    <button class="mode-btn" data-mode="hex" title="Hexagonal Grid"><i data-lucide="hexagon"></i></button>
+                    <button class="mode-btn" data-mode="square" title="Square Grid"><i data-lucide="square"></i></button>
+                    <button class="mode-btn" data-mode="point" title="Raw Points"><i data-lucide="dot"></i></button>
+                    <button class="mode-btn" data-mode="marker" title="Taxon Markers"><i data-lucide="map-pin"></i></button>
+                    <button class="mode-btn" data-mode="circles" title="Geo-Centroid"><i data-lucide="circle-dot"></i></button>
                   </div>
-                  <div class="control-group" style="padding-top: 10px;">
-                    <div class="label-row">
-                      <span class="label" title="Base number of bins per map tile">Base Resolution</span>
-                      <span id="density-value" class="val-tag">45 Bins</span>
-                    </div>
-                    <input type="range" id="gbif-density" min="10" max="150" value="45" step="1" aria-label="Base resolution bins">
-                  </div>
-                  <div class="control-group">
-                    <div class="label-row">
-                      <span class="label">Opacity</span>
-                      <span id="opacity-value" class="val-tag">80%</span>
-                    </div>
-                    <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
+              </div>
+
+              <!-- Palette Groups -->
+              <div class="style-groups" id="gbif-palette-groups">
+                
+                <div class="style-group" id="group-standard" style="display: none;">
+                  <div class="label">Supported Palettes</div>
+                  <div class="palette-grid">
+                    <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="purpleYellow" style="--color-main: #ce93d8; --color-sec: #ffeb3b" title="Amethyst"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="green2" style="--color-main: #2e7d32; --color-sec: #c8e6c9" title="Forest 2"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="iNaturalist" style="--color-main: #74ac00; --color-sec: #333333" title="iNaturalist"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="purpleWhite" style="--color-main: #7b1fa2; --color-sec: #ffffff" title="Purple-White"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="red" style="--color-main: #d32f2f; --color-sec: #ffcdd2" title="Crimson"><div class="badge"></div></button>
                   </div>
                 </div>
+
+                <div class="style-group" id="group-heatmaps" style="display: none;">
+                  <div class="label">Supported Palettes</div>
+                  <div class="palette-grid">
+                    <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #4a148c; --color-sec: #ce93d8" title="Royal Heat"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="blueHeat" style="--color-main: #0d47a1; --color-sec: #90caf9" title="Ocean Heat"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="orangeHeat" style="--color-main: #e65100; --color-sec: #ffcc80" title="Fire Heat"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="greenHeat" style="--color-main: #1b5e20; --color-sec: #a5d6a7" title="Forest Heat"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="fire" style="--color-main: #ff5722; --color-sec: #ffeb3b" title="Fire"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="glacier" style="--color-main: #00bcd4; --color-sec: #ffffff" title="Glacier"><div class="badge"></div></button>
+                  </div>
+                </div>
+
+                <div class="style-group" id="group-markers" style="display: none;">
+                  <div class="label">Marker Colors</div>
+                  <div class="palette-grid">
+                    <button class="palette-btn" data-palette="blue" style="--color-main: #2196f3; --color-sec: #bbdefb" title="Blue Marker"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="orange" style="--color-main: #ff9800; --color-sec: #fff3e0" title="Orange Marker"><div class="badge"></div></button>
+                    <button class="palette-btn" data-palette="outline" style="--color-main: #ffffff; --color-sec: #000000" title="Outline Grid"><div class="badge"></div></button>
+                  </div>
+                </div>
+
               </div>
+
+              <!-- Global Map Options -->
+              <div class="control-group" style="padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="label-row" style="margin-bottom: 8px;">
+                  <span class="label">Layer Opacity</span>
+                  <span id="opacity-value" class="val-tag">80%</span>
+                </div>
+                <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
+              </div>
+
+              <!-- Contextual Grid Settings (Only visible for Hex/Square) -->
+              <div id="grid-controls" style="display: none; padding-top: 12px; display: flex; flex-direction: column; gap: 12px;">
+                <div class="control-group">
+                  <div class="label-row" style="margin-bottom: 8px;">
+                    <span class="label">Grid Resolution</span>
+                    <span id="density-value" class="val-tag">40 Bins</span>
+                  </div>
+                  <input type="range" id="gbif-density" min="2" max="128" value="32" step="2" aria-label="Base resolution bins">
+                </div>
+                
+                <div class="control-group">
+                  <div class="label-row" style="margin-bottom: 8px;">
+                    <span class="label">Clean Render (Hide Borders)</span>
+                  </div>
+                  <label class="layer-toggle noborder-toggle">
+                    <input type="checkbox" id="gbif-noborders">
+                    <span class="toggle-track"></span>
+                  </label>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -233,28 +268,44 @@
           </div>
         </div>
 
-        <div class="ui-section collapsible" id="lang-section">
-          <div class="section-header">
-            <h2>SPECIES NAMES</h2>
-            <i data-lucide="chevron-down" class="chevron"></i>
-          </div>
-          <div class="section-content">
-            <div class="control-group">
-              <span class="label">Display Languages (first = primary)</span>
-              <div id="lang-chips" class="language-chips"></div>
-              <div class="lang-add-container">
-                <input type="text" id="lang-search" class="lang-search-input" placeholder="Add language..." autocomplete="off">
-                <ul id="lang-dropdown" class="lang-dropdown"></ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="panel-footer">
           <button id="reset-all-btn" class="reset-btn" aria-label="Reset all settings to defaults">
             <i data-lucide="rotate-ccw"></i>
             <span>Reset All Settings</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Language Settings Panel -->
+    <div id="lang-panel" class="gbif-settings-panel">
+      <div class="drag-handle"></div>
+      <div class="panel-header">
+        <h1>LANGUAGES</h1>
+        <div class="panel-header-actions">
+          <button id="lang-panel-close" class="panel-close-btn" aria-label="Close panel">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="ui-section active">
+          <div class="section-content" style="padding-top: 10px;">
+            <p class="description" style="color: rgba(255,255,255,0.6); margin-bottom: 12px; font-size: 13px;">
+              Select the priority for display names. Fallbacks will run in top-down order. 
+              <strong>'Latin'</strong> will show the <em>Scientific Name</em>.
+            </p>
+            <div class="control-group">
+              <span class="label">Display Languages (Primary First)</span>
+              <div id="lang-chips" class="language-chips"></div>
+              
+              <div class="lang-add-container" style="margin-top: 8px;">
+                <span class="label" style="font-size: 10px; opacity: 0.5; margin-bottom: 4px;">Add New Language</span>
+                <input type="text" id="lang-search" class="lang-search-input" placeholder="Search language name or code..." autocomplete="off">
+                <ul id="lang-dropdown" class="lang-dropdown"></ul>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
