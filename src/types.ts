@@ -32,12 +32,4 @@ export interface VectorMarkerEntry {
   cssClass: string; label: string; iconUrl: string; marker: L.Marker; taxonomy: TaxonomyBlock;
 }
 
-export type Rank = 'KINGDOM' | 'PHYLUM' | 'CLASS' | 'ORDER' | 'FAMILY' | 'GENUS' | 'SPECIES';
-
-export interface TaxaNode {
-  name: string;
-  rank: Rank;
-  count: number;
-  children: Map<string, TaxaNode>;
-  isFiltered?: boolean;
-}
+// TaxaNode and Rank are defined in src/map/taxonomy.ts

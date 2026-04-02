@@ -11,6 +11,7 @@ import { initMapCore } from './map/core';
 import { initFabs } from './ui/fabs';
 import { initGbifPanel } from './ui/panel';
 import { initLegend } from './ui/legend';
+import { initTaxonHoverCard } from './ui/hover-card';
 import { initGeo } from './ui/geo';
 import { initLanguages } from './ui/languages';
 import { initWelcome } from './ui/welcome';
@@ -30,13 +31,18 @@ async function initMap() {
     const map = initMapCore(state);
 
     const { updateGbifLayer } = initGbifLayerManager(map, state);
-    const { updateTaxonomyLegend } = initLegend(state);
+
+    // Hover card must be created before legend (legend needs showTaxonHoverCard)
+    const hoverCard = initTaxonHoverCard(state);
+
+    const { updateTaxonomyLegend, onLanguagesChanged } = initLegend(state, hoverCard);
     const { closeGbifPanel } = initGbifPanel(map, state, updateGbifLayer);
-    
+
     initFabs(map, state, closeGbifPanel);
     initGeo(map);
     initLanguages(state, () => {
-       // Language change callback
+      // Re-render legend with new language preferences
+      void onLanguagesChanged();
     });
     initWelcome();
     initVectorSearch(map, state, updateTaxonomyLegend);

@@ -73,6 +73,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
     maxClusterRadius: 45,
     showCoverageOnHover: false
   }).addTo(map);
+  state.vectorLayer = vectorLayer;
 
   const hideLegendFab = () => {
     document.getElementById('legend-toggle')?.classList.add('hidden');
@@ -225,6 +226,15 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
 
       if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
       if (searchAreaBtn) searchAreaBtn.classList.add('hidden');
+
+      // Pre-warm vernacular name cache for all found species (fire-and-forget)
+      const speciesKeys = [...new Set(
+        state.vectorMarkers
+          .map(m => m.taxonomy.speciesKey)
+          .filter((k): k is number => typeof k === 'number' && k > 0)
+      )];
+      Promise.all(speciesKeys.map(k => resolveVernacularNames(k)));
+
       updateTaxonomyLegend();
     } catch (e) {
       showErrorToast('Area search failed');

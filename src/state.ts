@@ -31,6 +31,7 @@ export class AppState {
   userLanguages: string[] = ['en'];
   vectorMarkers: any[] = [];
   gbifLayer: any = null;
+  vectorLayer: any = null; // MarkerClusterGroup — set by initVectorSearch
   config: AppConfig;
 
   constructor(config: AppConfig) {
