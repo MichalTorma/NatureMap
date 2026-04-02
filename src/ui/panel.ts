@@ -8,31 +8,18 @@ import {
 import { showErrorToast } from './toasts';
 
 /**
- * GBIF Style Registry
- * Defines which rendering modes are compatible with each technical palette.
+ * GBIF Shape Registry
+ * Maps each rendering shape to its supported palette group ID and fallback palette.
  */
-const STYLE_REGISTRY: Record<string, RenderMode[]> = {
-  // Standard Grids (Point + Poly)
-  classic: ['point', 'hex', 'square'],
-  green: ['point', 'hex', 'square'],
-  purpleYellow: ['point', 'hex', 'square'],
-  green2: ['point', 'hex', 'square'],
-  iNaturalist: ['point', 'hex', 'square'],
-  purpleWhite: ['point', 'hex', 'square'],
-  red: ['point', 'hex', 'square'],
-  // Heatmaps (Point only)
-  purpleHeat: ['point'],
-  blueHeat: ['point'],
-  orangeHeat: ['point'],
-  greenHeat: ['point'],
-  fire: ['point'],
-  glacier: ['point'],
-  // Markers
-  blue: ['marker'],
-  orange: ['marker'],
-  // Outline
-  outline: ['hex', 'square']
+const SHAPE_REGISTRY: Record<string, { group: string, defaultPalette: string }> = {
+  hex: { group: 'group-standard', defaultPalette: 'classic' },
+  square: { group: 'group-standard', defaultPalette: 'classic' },
+  point: { group: 'group-standard', defaultPalette: 'classic' },
+  heatmap: { group: 'group-heatmaps', defaultPalette: 'purpleHeat' },
+  marker: { group: 'group-markers', defaultPalette: 'blue' },
+  circles: { group: '', defaultPalette: 'scaled.circles' } // special, uses no specific palettes
 };
+
 
 export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () => void) {
   const gbifPanel = document.getElementById('gbif-panel');
@@ -48,9 +35,8 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   const opacityInput = document.getElementById('gbif-opacity') as HTMLInputElement;
   const densityInput = document.getElementById('gbif-density') as HTMLInputElement;
   const densityValueDisplay = document.getElementById('density-value');
-  const advancedToggle = document.getElementById('advanced-toggle');
-  const advancedDrawer = document.getElementById('advanced-drawer');
   const noBordersToggle = document.getElementById('gbif-noborders') as HTMLInputElement;
+  const gridControlsContainer = document.getElementById('grid-controls') as HTMLElement;
 
   let currentHistory: TaxonHistory[] = JSON.parse(localStorage.getItem('gbif_history') || '[]');
   let searchGeneration = 0;
@@ -218,38 +204,44 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
 
   const pickers = {
     mode: document.querySelectorAll('#gbif-mode-picker .mode-btn'),
-    palette: document.querySelectorAll('.palette-btn'),
-    scale: document.querySelectorAll('#gbif-scale-mode .toggle-btn')
+    palette: document.querySelectorAll('.palette-btn')
   };
 
   /**
-   * Refined UI compatibility logic.
-   * Enables/Disables modes based on the palette capabilities.
+   * Refined UI compatibility logic (Shape-First).
+   * Displays the correct palette group based on the selected shaping mode.
    */
   const updateStyleCompatibility = () => {
-    const compatibleModes = STYLE_REGISTRY[state.currentPalette] || ['point'];
+    const shapeConfig = SHAPE_REGISTRY[state.currentRenderMode] || SHAPE_REGISTRY['point'];
+    const activeGroupId = shapeConfig.group;
     
-    // Update Mode Buttons
-    pickers.mode.forEach(btn => {
-      const mode = (btn as HTMLElement).dataset.mode as RenderMode;
-      const isAvailable = compatibleModes.includes(mode) || mode === 'circles'; // Circles is special
-      btn.classList.toggle('unsupported', !isAvailable);
-      btn.classList.toggle('active', state.currentRenderMode === mode);
+    // Toggle visibility of palette groups
+    document.querySelectorAll('.style-group').forEach(group => {
+      const g = group as HTMLElement;
+      g.style.display = g.id === activeGroupId ? '' : 'none';
+      
+      // If the current palette is not in the newly visible group, we need to switch it.
+      // But we only care if the group actually changed and the current palette is hidden.
+      // Easiest is to check if the currently selected palette button is visible.
     });
 
-    // If current mode became unsupported, switch to the first compatible one
-    if (!compatibleModes.includes(state.currentRenderMode) && state.currentRenderMode !== 'circles') {
-      state.currentRenderMode = compatibleModes[0];
-      pickers.mode.forEach(btn => {
-        btn.classList.toggle('active', (btn as HTMLElement).dataset.mode === state.currentRenderMode);
+    // Check if the current palette button is visible in the new group layout
+    const activePaletteBtn = document.querySelector(`.palette-btn[data-palette="${state.currentPalette}"]`) as HTMLElement;
+    const isVisible = activePaletteBtn && activePaletteBtn.closest('.style-group')?.id === activeGroupId;
+
+    if (!isVisible && activeGroupId) {
+      // Auto-switch to the default palette for this shape
+      state.currentPalette = shapeConfig.defaultPalette;
+      pickers.palette.forEach(btn => {
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.palette === state.currentPalette);
       });
     }
 
-    // Toggle NoBorders visibility
-    const isPoly = state.currentRenderMode === 'hex' || state.currentRenderMode === 'square';
-    const nobordersContainer = noBordersToggle?.closest('.control-group') as HTMLElement;
-    if (nobordersContainer) nobordersContainer.style.display = isPoly ? '' : 'none';
+    // Toggle Contextual Grid options
+    const isGrid = state.currentRenderMode === 'hex' || state.currentRenderMode === 'square';
+    if (gridControlsContainer) gridControlsContainer.style.display = isGrid ? 'flex' : 'none';
   };
+
 
   pickers.mode.forEach(btn => btn.addEventListener('click', () => {
     const mode = (btn as HTMLElement).dataset.mode as RenderMode;
@@ -276,22 +268,6 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
     updateGbifLayer();
   });
 
-  pickers.scale.forEach(btn => btn.addEventListener('click', () => {
-    const val = (btn as HTMLElement).dataset.mode;
-    if (val) {
-       state.currentScaleMode = val as 'static' | 'geographic';
-       pickers.scale.forEach(b => b.classList.toggle('active', b === btn));
-       updateGbifLayer();
-    }
-  }));
-
-  advancedToggle?.addEventListener('click', () => {
-    if (advancedDrawer) {
-      const isHidden = advancedDrawer.style.display === 'none';
-      advancedDrawer.style.display = isHidden ? 'block' : 'none';
-      advancedToggle.classList.toggle('open', isHidden);
-    }
-  });
 
   gbifYearInput.addEventListener('input', () => {
     const val = parseInt(gbifYearInput.value);

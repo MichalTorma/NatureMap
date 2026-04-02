@@ -138,21 +138,22 @@
               
               <!-- Rendering Modes (Dynamic Sub-options) -->
               <div class="style-modes-container" id="gbif-mode-picker">
-                  <div class="label">Rendering Mode</div>
+                  <div class="label">Rendering Shape</div>
                   <div class="mode-bar">
-                    <button class="mode-btn active" data-mode="point" title="Raw Points"><i data-lucide="dot"></i></button>
+                    <button class="mode-btn active" data-mode="heatmap" title="Heatmap"><i data-lucide="wind"></i></button>
                     <button class="mode-btn" data-mode="hex" title="Hexagonal Grid"><i data-lucide="hexagon"></i></button>
                     <button class="mode-btn" data-mode="square" title="Square Grid"><i data-lucide="square"></i></button>
+                    <button class="mode-btn" data-mode="point" title="Raw Points"><i data-lucide="dot"></i></button>
                     <button class="mode-btn" data-mode="marker" title="Taxon Markers"><i data-lucide="map-pin"></i></button>
                     <button class="mode-btn" data-mode="circles" title="Geo-Centroid"><i data-lucide="circle-dot"></i></button>
                   </div>
               </div>
 
               <!-- Palette Groups -->
-              <div class="style-groups">
+              <div class="style-groups" id="gbif-palette-groups">
                 
-                <div class="style-group">
-                  <div class="label">Standard Grids</div>
+                <div class="style-group" id="group-standard" style="display: none;">
+                  <div class="label">Supported Palettes</div>
                   <div class="palette-grid">
                     <button class="palette-btn active" data-palette="classic" style="--color-main: #ffde38; --color-sec: #f44336" title="Classic"><div class="badge"></div></button>
                     <button class="palette-btn" data-palette="green" style="--color-main: #a5d6a7; --color-sec: #1b5e20" title="Forest"><div class="badge"></div></button>
@@ -164,8 +165,8 @@
                   </div>
                 </div>
 
-                <div class="style-group">
-                  <div class="label">Heatmaps & Fire</div>
+                <div class="style-group" id="group-heatmaps" style="display: none;">
+                  <div class="label">Supported Palettes</div>
                   <div class="palette-grid">
                     <button class="palette-btn" data-palette="purpleHeat" style="--color-main: #4a148c; --color-sec: #ce93d8" title="Royal Heat"><div class="badge"></div></button>
                     <button class="palette-btn" data-palette="blueHeat" style="--color-main: #0d47a1; --color-sec: #90caf9" title="Ocean Heat"><div class="badge"></div></button>
@@ -176,8 +177,8 @@
                   </div>
                 </div>
 
-                <div class="style-group">
-                  <div class="label">Markers & Special</div>
+                <div class="style-group" id="group-markers" style="display: none;">
+                  <div class="label">Marker Colors</div>
                   <div class="palette-grid">
                     <button class="palette-btn" data-palette="blue" style="--color-main: #2196f3; --color-sec: #bbdefb" title="Blue Marker"><div class="badge"></div></button>
                     <button class="palette-btn" data-palette="orange" style="--color-main: #ff9800; --color-sec: #fff3e0" title="Orange Marker"><div class="badge"></div></button>
@@ -187,47 +188,36 @@
 
               </div>
 
-              <div class="advanced-section">
-                <div class="advanced-header" id="advanced-toggle">
-                  <span>Scientific Tuning</span>
-                  <i data-lucide="settings-2"></i>
+              <!-- Global Map Options -->
+              <div class="control-group" style="padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="label-row" style="margin-bottom: 8px;">
+                  <span class="label">Layer Opacity</span>
+                  <span id="opacity-value" class="val-tag">80%</span>
                 </div>
-                <div class="advanced-drawer" id="advanced-drawer" style="display: none;">
-                  <div class="control-group">
-                    <div class="label-row" style="margin-bottom: 8px;">
-                      <span class="label">Remove Borders</span>
-                    </div>
-                    <label class="layer-toggle noborder-toggle">
-                      <input type="checkbox" id="gbif-noborders">
-                      <span class="toggle-track"></span>
-                    </label>
+                <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
+              </div>
+
+              <!-- Contextual Grid Settings (Only visible for Hex/Square) -->
+              <div id="grid-controls" style="display: none; padding-top: 12px; display: flex; flex-direction: column; gap: 12px;">
+                <div class="control-group">
+                  <div class="label-row" style="margin-bottom: 8px;">
+                    <span class="label">Grid Resolution</span>
+                    <span id="density-value" class="val-tag">40 Bins</span>
                   </div>
-                  
-                  <div class="control-group">
-                    <div class="label-row" style="margin-bottom: 8px;">
-                      <span class="label" title="How the grid visually responds when zooming the map">Scale Behavior</span>
-                    </div>
-                    <div id="gbif-scale-mode" class="button-toggle-group">
-                      <button class="toggle-btn active" data-mode="static" title="Static visual size">Static Area</button>
-                      <button class="toggle-btn" data-mode="geographic" title="Geo-locked boundaries">Geo Locked</button>
-                    </div>
+                  <input type="range" id="gbif-density" min="2" max="128" value="32" step="2" aria-label="Base resolution bins">
+                </div>
+                
+                <div class="control-group">
+                  <div class="label-row" style="margin-bottom: 8px;">
+                    <span class="label">Clean Render (Hide Borders)</span>
                   </div>
-                  <div class="control-group" style="padding-top: 10px;">
-                    <div class="label-row">
-                      <span class="label" title="Base number of bins per map tile">Base Resolution</span>
-                      <span id="density-value" class="val-tag">45 Bins</span>
-                    </div>
-                    <input type="range" id="gbif-density" min="10" max="150" value="45" step="1" aria-label="Base resolution bins">
-                  </div>
-                  <div class="control-group">
-                    <div class="label-row">
-                      <span class="label">Opacity</span>
-                      <span id="opacity-value" class="val-tag">80%</span>
-                    </div>
-                    <input type="range" id="gbif-opacity" min="0.1" max="1" value="0.8" step="0.1" aria-label="Layer opacity">
-                  </div>
+                  <label class="layer-toggle noborder-toggle">
+                    <input type="checkbox" id="gbif-noborders">
+                    <span class="toggle-track"></span>
+                  </label>
                 </div>
               </div>
+
             </div>
           </div>
         </div>

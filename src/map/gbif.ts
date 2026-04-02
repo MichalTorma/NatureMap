@@ -47,29 +47,19 @@ export const GbifLayerClass = L.TileLayer.extend({
     const shape = this.options.gbifShape;
     const baseDensity = this.options.gbifDensity;
     
-    if (this.options.gbifGridMode === 'geographic') {
-        const z = this._getZoomForUrl ? this._getZoomForUrl() : coords.z;
-        if (shape === 'hex') {
-            const dynamicDensity = Math.max(1, Math.round(baseDensity / Math.pow(2, z)));
-            url += `&bin=hex&hexPerTile=${dynamicDensity}`;
-        } else if (shape === 'square') {
-            const baseSize = 4096 / baseDensity;
-            const scaledSize = Math.min(4096, baseSize * Math.pow(2, z));
-            const p2 = Math.pow(2, Math.round(Math.log2(scaledSize)));
-            const validP2 = Math.max(2, Math.min(4096, p2));
-            url += `&bin=square&squareSize=${validP2}`;
-        }
-    } else {
-        if (shape === 'hex') url += `&bin=hex&hexPerTile=${baseDensity}`;
-        if (shape === 'square') {
-            const baseSize = 4096 / baseDensity;
-            const p2 = Math.pow(2, Math.round(Math.log2(baseSize)));
-            const validP2 = Math.max(2, Math.min(4096, p2));
-            url += `&bin=square&squareSize=${validP2}`;
-        }
+    if (shape === 'hex') {
+        url += `&bin=hex&hexPerTile=${baseDensity}`;
+    } else if (shape === 'square') {
+        // Enforce squareSize is a nearest valid power of 2 based on density
+        const targetSize = 4096 / baseDensity;
+        const p2 = Math.pow(2, Math.round(Math.log2(targetSize)));
+        const validP2 = Math.max(2, Math.min(4096, p2));
+        url += `&bin=square&squareSize=${validP2}`;
     }
+    
     return url;
   }
+
 });
 
 export function gbifThumb(occurrenceKey: number | string, mediaUrl: string, width = 300): string {

@@ -1,7 +1,7 @@
 import type L from 'leaflet';
 import type { AppConfig } from './types';
 
-export type RenderMode = 'point' | 'hex' | 'square' | 'marker' | 'circles';
+export type RenderMode = 'heatmap' | 'point' | 'hex' | 'square' | 'marker' | 'circles';
 
 export const STORAGE_KEY_CENTER = 'gbif_center';
 export const STORAGE_KEY_ZOOM = 'gbif_zoom';
@@ -16,8 +16,7 @@ export class AppState {
   currentYear: number | 'ALL' = 'ALL';
   currentOrigins: string[] = ['ALL'];
   currentOpacity: number = 0.8;
-  currentDensity: number = 40;
-  currentScaleMode: 'static' | 'geographic' = 'geographic';
+  currentDensity: number = 32;
   currentPalette: string = 'classic';
   currentRenderMode: RenderMode = 'hex';
   currentNoBorders: boolean = false;
@@ -65,7 +64,6 @@ export class AppState {
     
     params.set('year', this.currentYear.toString());
     params.set('density', this.currentDensity.toString());
-    params.set('scale', this.currentScaleMode);
 
     if (map) {
       const center = map.getCenter();
@@ -93,8 +91,5 @@ export class AppState {
     
     const density = params.get('density');
     if (density) this.currentDensity = parseInt(density);
-    
-    const scale = params.get('scale');
-    if (scale === 'static' || scale === 'geographic') this.currentScaleMode = scale;
   }
 }

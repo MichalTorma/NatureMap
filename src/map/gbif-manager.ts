@@ -52,13 +52,11 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
     if (!state.gbifEnabled) return;
     
     const url = buildGbifUrl();
-    const isBinned = state.currentRenderMode === 'hex' || state.currentRenderMode === 'square';
     const isSpecial = state.currentRenderMode === 'circles' || state.currentRenderMode === 'marker';
     
     // Zoom limits based on mode
-    let maxNative = 17;
-    if (isBinned) maxNative = state.currentScaleMode === 'geographic' ? 17 : 14;
-    if (isSpecial) maxNative = 12;
+    let maxNative = 16;
+    if (isSpecial || state.currentRenderMode === 'heatmap') maxNative = 12; // Cap heavy renders
 
     state.gbifLayer = new (GbifLayerClass as any)(url, {
       opacity: state.currentOpacity,
@@ -70,7 +68,6 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
       maxNativeZoom: maxNative,
       gbifShape: state.currentRenderMode,
       gbifDensity: state.currentDensity,
-      gbifGridMode: state.currentScaleMode,
       errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
     }).addTo(map);
     
