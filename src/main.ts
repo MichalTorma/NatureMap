@@ -20,6 +20,7 @@ import { initIcons } from './ui/icons';
 import { showErrorToast } from './ui/toasts';
 import { initGbifLayerManager } from './map/gbif-manager';
 import { initExternalStatusUi } from './ui/external-status-ui';
+import { initBugReport } from './ui/bug-report';
 
 async function initMap() {
   try {
@@ -48,6 +49,7 @@ async function initMap() {
     });
     initWelcome();
     initVectorSearch(map, state, updateTaxonomyLegend);
+    initBugReport(map, state, config);
 
     // Initial layer load
     updateGbifLayer();

@@ -1,4 +1,7 @@
 {
+  "issueTracker": {
+    "newIssueUrl": "https://github.com/MichalTorma/MyMap/issues/new"
+  },
   "mapOptions": {
     "center": [37.7749, -122.4194],
     "zoom": 13

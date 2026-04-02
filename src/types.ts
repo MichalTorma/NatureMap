@@ -21,6 +21,17 @@ export interface AppConfig {
     defaultStyle: string;
     availableStyles: { id: string; label: string; params: string }[];
   };
+  /** If set, "Open GitHub" pre-fills a new issue; otherwise users copy diagnostics and file manually. */
+  issueTracker?: {
+    newIssueUrl: string;
+    /** Optional: GitHub issue template name, e.g. "bug_report" for .github/ISSUE_TEMPLATE/bug_report.md */
+    template?: string;
+    /**
+     * If true, do not upload the screenshot to tmpfiles.org — the GitHub draft will omit the image;
+     * use Download PNG and attach manually (diagnostics are still prefilled).
+     */
+    skipTemporaryImageUpload?: boolean;
+  };
 }
 
 export interface TaxonomyBlock {

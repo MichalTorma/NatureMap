@@ -1,0 +1,238 @@
+/* Floating bug report control — opposite corner from layer stack */
+.bug-report-fab-wrap {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 2500;
+}
+
+.bug-report-fab {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--panel-border);
+  color: #fbbf24;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bug-report-fab svg {
+  width: 22px;
+  height: 22px;
+}
+
+.bug-report-fab:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+}
+
+.bug-report-fab:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.bug-report-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeInModal 0.25s ease;
+}
+
+.bug-report-modal.hidden {
+  display: none !important;
+}
+
+.bug-report-modal-inner {
+  background: rgba(30, 41, 59, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 22px 24px;
+  max-width: 560px;
+  width: 100%;
+  max-height: min(92vh, 880px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+}
+
+.bug-report-modal-inner h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  padding-right: 36px;
+}
+
+.bug-report-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bug-report-modal-close {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -6px -6px 0 0;
+}
+
+.bug-report-modal-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.bug-report-modal-lede {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.bug-report-preview-wrap {
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 38vh;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.bug-report-preview-wrap img {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.bug-report-diagnostics-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.bug-report-user-message {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.65);
+  color: rgba(248, 250, 252, 0.96);
+  box-sizing: border-box;
+}
+
+.bug-report-user-message::placeholder {
+  color: rgba(248, 250, 252, 0.35);
+}
+
+.bug-report-user-message:focus {
+  outline: none;
+  border-color: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.12);
+}
+
+#bug-report-diagnostics {
+  width: 100%;
+  min-height: 140px;
+  max-height: 200px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.9);
+  color: rgba(226, 232, 240, 0.95);
+  box-sizing: border-box;
+}
+
+.bug-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bug-report-actions .modal-btn {
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  text-align: center;
+  text-decoration: none;
+}
+
+.bug-report-actions button.modal-btn.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bug-report-github-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+#bug-report-status {
+  min-height: 1.25em;
+  font-size: 0.8rem;
+  color: rgba(52, 211, 153, 0.95);
+}
+
+@media (max-width: 640px) {
+  .bug-report-fab-wrap {
+    bottom: 20px;
+    left: 16px;
+  }
+
+  .bug-report-modal-inner {
+    padding: 18px 16px;
+    max-height: 94vh;
+  }
+
+  .bug-report-preview-wrap {
+    max-height: 28vh;
+  }
+}
+
+/* Legend / panel open: keep bug FAB clear of left UI if needed */
+body.panel-active .bug-report-fab-wrap {
+  bottom: 20px;
+}
