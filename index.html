@@ -88,6 +88,18 @@
               <i data-lucide="map"></i>
             </button>
           </div>
+
+          <div class="layer-separator"></div>
+
+          <!-- Language Settings Row -->
+          <div class="layer-row-item layer-stack-item">
+            <div class="layer-name-chip chip">
+              <span class="layer-name">Global Languages</span>
+            </div>
+            <button id="lang-fab" class="layer-fab lang-fab" aria-label="Languages" title="Language Configuration">
+              <i data-lucide="languages"></i>
+            </button>
+          </div>
         </div>
         <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
           <i data-lucide="layers" class="menu-icon"></i>
@@ -256,28 +268,43 @@
           </div>
         </div>
 
-        <div class="ui-section collapsible" id="lang-section">
-          <div class="section-header">
-            <h2>SPECIES NAMES</h2>
-            <i data-lucide="chevron-down" class="chevron"></i>
-          </div>
-          <div class="section-content">
-            <div class="control-group">
-              <span class="label">Display Languages (first = primary)</span>
-              <div id="lang-chips" class="language-chips"></div>
-              <div class="lang-add-container">
-                <input type="text" id="lang-search" class="lang-search-input" placeholder="Add language..." autocomplete="off">
-                <ul id="lang-dropdown" class="lang-dropdown"></ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="panel-footer">
           <button id="reset-all-btn" class="reset-btn" aria-label="Reset all settings to defaults">
             <i data-lucide="rotate-ccw"></i>
             <span>Reset All Settings</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Language Settings Panel -->
+    <div id="lang-panel" class="gbif-settings-panel">
+      <div class="drag-handle"></div>
+      <div class="panel-header">
+        <h1>LANGUAGES</h1>
+        <div class="panel-header-actions">
+          <button id="lang-panel-close" class="panel-close-btn" aria-label="Close panel">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="ui-section active">
+          <div class="section-content" style="padding-top: 10px;">
+            <p class="description" style="color: rgba(255,255,255,0.6); margin-bottom: 12px; font-size: 13px;">
+              Select the languages to display for common species names. Fallbacks will run in top-down order.
+            </p>
+            <div class="control-group">
+              <span class="label">Display Languages (Primary First)</span>
+              <div id="lang-chips" class="language-chips"></div>
+              
+              <div class="lang-add-container" style="margin-top: 8px;">
+                <span class="label" style="font-size: 10px; opacity: 0.5; margin-bottom: 4px;">Add New Language</span>
+                <input type="text" id="lang-search" class="lang-search-input" placeholder="Search language name or code..." autocomplete="off">
+                <ul id="lang-dropdown" class="lang-dropdown"></ul>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

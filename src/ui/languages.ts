@@ -6,6 +6,32 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
   const langChipsContainer = document.getElementById('lang-chips');
   const langSearchInput = document.getElementById('lang-search') as HTMLInputElement;
   const langDropdown = document.getElementById('lang-dropdown') as HTMLElement;
+  const langPanel = document.getElementById('lang-panel');
+  const langPanelClose = document.getElementById('lang-panel-close');
+  const langFab = document.getElementById('lang-fab');
+  const panelOverlay = document.getElementById('panel-overlay');
+
+  const openLangPanel = () => {
+    langPanel?.classList.add('open');
+    langFab?.classList.add('panel-open');
+    panelOverlay?.classList.add('active');
+    document.body.classList.add('panel-active');
+  };
+
+  const closeLangPanel = () => {
+    langPanel?.classList.remove('open');
+    langFab?.classList.remove('panel-open');
+    panelOverlay?.classList.remove('active');
+    document.body.classList.remove('panel-active');
+  };
+
+  langFab?.addEventListener('click', () => {
+    if (langPanel?.classList.contains('open')) closeLangPanel();
+    else openLangPanel();
+  });
+
+  langPanelClose?.addEventListener('click', closeLangPanel);
+  panelOverlay?.addEventListener('click', closeLangPanel);
 
   const saveLanguages = () => {
     localStorage.setItem(STORAGE_KEY_LANGS, JSON.stringify(state.userLanguages));
@@ -79,4 +105,5 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
   }
 
   renderLanguageChips();
+  return { openLangPanel, closeLangPanel };
 }

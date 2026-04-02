@@ -78,6 +78,10 @@
   overscroll-behavior: contain;
 }
 
+#lang-panel .panel-body {
+  overflow: visible;
+}
+
 .panel-footer {
   padding: 12px 24px 20px;
   border-top: 1px solid var(--panel-border);
@@ -203,6 +207,10 @@
   max-height: 2000px;
   overflow: hidden;
   transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.ui-section.active .section-content {
+  overflow: visible;
 }
 
 .ui-section:not(.active) .section-content {

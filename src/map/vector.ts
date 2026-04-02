@@ -140,7 +140,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
             </div>
             <div class="popup-links">
               <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank">${getIconSvg('external-link')} GBIF</a>
-              ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" class="wiki-link">${getIconSvg('wikipedia')} Wiki</a>` : ''}
+              ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" class="wiki-link">${getIconSvg('book-open')} Wiki</a>` : ''}
             </div>
           `;
 
