@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import codes from 'iso-language-codes';
 
 /* Minimal MD5 – RFC 1321 */
 export function md5(str: string): string {
@@ -74,32 +75,88 @@ export interface TaxonHistory {
 }
 export const vnCache = new Map<number, VnName[]>();
 
-export async function resolveVernacularNames(taxonKey: number, userLanguages: string[] = ['en']): Promise<VnName[]> {
+/**
+ * Normalizes language codes from mixed formats (eng, en, en-US, spa...) 
+ * into 2-letter ISO 639-1 codes for consistent matching with UI preferences.
+ */
+/**
+ * Robust mapping for common 3-letter ISO codes to 2-letter equivalents.
+ * GBIF often returns these from legacy datasets.
+ */
+const ISO3_TO_2: Record<string, string> = {
+  eng: 'en', spa: 'es', fra: 'fr', deu: 'de', ita: 'it', por: 'pt', rus: 'ru',
+  zho: 'zh', jpn: 'ja', ara: 'ar', hin: 'hi', nld: 'nl', swe: 'sv', nor: 'no',
+  dan: 'da', fin: 'fi', pol: 'pl', ces: 'cs', slk: 'sk', slo: 'sk', hun: 'hu', tur: 'tr'
+};
+
+function normalizeLanguageCode(code: string): string {
+  if (!code) return '';
+  const norm = code.toLowerCase().trim();
+  if (norm.length === 2) return norm;
+  
+  // Try hardcoded common mappings first (fastest)
+  if (ISO3_TO_2[norm]) return ISO3_TO_2[norm];
+
+  // Search in iso-language-codes library
+  const info = codes.find(c => 
+    c.iso639_1 === norm || 
+    (c as any).iso639_2 === norm || 
+    (c as any).iso639_2T === norm ||
+    (c as any).iso639_2B === norm ||
+    (c as any).iso639_3 === norm ||
+    c.name.toLowerCase() === norm
+  );
+  if (info) return info.iso639_1;
+  
+  // Handle locale variants (en-US, pt-BR)
+  if (norm.includes('-')) return norm.split('-')[0];
+  if (norm.includes('_')) return norm.split('_')[0];
+  
+  return norm;
+}
+
+export async function resolveVernacularNames(taxonKey: number): Promise<VnName[]> {
+  if (!taxonKey) return [];
   if (!vnCache.has(taxonKey)) {
     try {
-      const res = await fetch(`https://api.gbif.org/v1/species/${taxonKey}/vernacularNames?limit=200`);
+      const res = await fetch(`https://api.gbif.org/v1/species/${taxonKey}/vernacularNames?limit=150`);
       if (!res.ok) throw new Error(`GBIF error ${res.status}`);
       const data = await res.json();
       const allNames: VnName[] = [];
+      const seen = new Set<string>();
+      
       for (const vn of data.results || []) {
         if (!vn.vernacularName || !vn.language) continue;
-        const langRaw = String(vn.language).toLowerCase();
+        const langRaw = normalizeLanguageCode(String(vn.language));
+        if (!langRaw) continue;
+        const key = `${langRaw}:${vn.vernacularName.toLowerCase()}`;
+        if (seen.has(key)) continue;
         allNames.push({ lang: langRaw, name: vn.vernacularName });
+        seen.add(key);
       }
       vnCache.set(taxonKey, allNames);
     } catch (e) {
+      console.warn(`Failed to fetch vernacular names for ${taxonKey}:`, e);
       vnCache.set(taxonKey, []);
     }
   }
-  const all = vnCache.get(taxonKey)!;
-  const result: VnName[] = [];
-  const seen = new Set<string>();
-  for (const lc of userLanguages) {
-    const match = all.find(n => n.lang === lc && !seen.has(lc));
-    if (match) { result.push(match); seen.add(lc); }
-  }
-  return result.length > 0 ? result : all.slice(0, 4);
+  return vnCache.get(taxonKey)!;
 }
+
+/**
+ * Negotiates the best display name based on user language preferences.
+ * 'la' (Latin) is treated as a request for the Scientific Name.
+ */
+export function getBestTaxonName(scientificName: string, userLanguages: string[], allVernaculars: VnName[]): { name: string, lang: string, isScientific: boolean } {
+  for (const lc of userLanguages) {
+    if (lc === 'la') return { name: scientificName, lang: 'la', isScientific: true };
+    const match = allVernaculars.find(v => v.lang === lc);
+    if (match) return { name: match.name, lang: lc, isScientific: false };
+  }
+  // Ultimate fallback to Scientific Name if nothing in user list matched
+  return { name: scientificName, lang: 'la', isScientific: true };
+}
+
 
 export const datasetCache = new Map<string, string>();
 export async function resolveDatasetName(datasetKey: string): Promise<string> {
@@ -116,12 +173,18 @@ export async function resolveDatasetName(datasetKey: string): Promise<string> {
   }
 }
 
-export interface WikiInfo { imgUrl: string | null, wikiUrl: string, type: 'wikipedia' | 'wikidata' }
+export interface WikiInfo { 
+  imgUrl: string | null, 
+  wikiUrl: string, 
+  type: 'wikipedia' | 'wikidata',
+  labels: Record<string, string> 
+}
 export const wikidataCache = new Map<number, WikiInfo | null>();
 
-export async function resolveWikidataInfo(taxonKey: number, _userLanguages: string[] = ['en']): Promise<WikiInfo | null> {
+export async function resolveWikidataInfo(taxonKey: number, userLanguages: string[] = ['en']): Promise<WikiInfo | null> {
   if (wikidataCache.has(taxonKey)) return wikidataCache.get(taxonKey)!;
   try {
+    const langParam = userLanguages.join('|');
     const url = `https://www.wikidata.org/w/api.php?action=query&prop=pageimages|info&inprop=url&generator=search&gsrsearch=haswbstatement:P846=${taxonKey}&piprop=thumbnail&pithumbsize=600&format=json&origin=*`;
     const res = await fetch(url);
     const data = await res.json();
@@ -129,11 +192,25 @@ export async function resolveWikidataInfo(taxonKey: number, _userLanguages: stri
     if (!pages) return null;
     const pageId = Object.keys(pages)[0];
     const page = pages[pageId];
+    
     const imgUrl = page.thumbnail?.source || null;
-    let wikiUrl = page.fullurl || `https://www.wikidata.org/wiki/${page.title}`;
-    let type: 'wikipedia' | 'wikidata' = 'wikidata';
+    const wikiUrl = page.fullurl || `https://www.wikidata.org/wiki/${page.title}`;
+    
+    // Explicitly fetch labels using wbgetentities for 100% reliability
+    const labels: Record<string, string> = {};
+    const qid = page.title; // generator=search with P846 search returns Qid as title
+    if (qid.startsWith('Q')) {
+      const entityRes = await fetch(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=labels&languages=${langParam}&format=json&origin=*`);
+      const entityData = await entityRes.json();
+      const entityEntry = entityData.entities?.[qid];
+      if (entityEntry && entityEntry.labels) {
+        for (const lc of userLanguages) {
+          if (entityEntry.labels[lc]) labels[lc] = entityEntry.labels[lc].value;
+        }
+      }
+    }
 
-    const result: WikiInfo = { imgUrl, wikiUrl, type };
+    const result: WikiInfo = { imgUrl, wikiUrl, type: 'wikidata', labels };
     wikidataCache.set(taxonKey, result);
     return result;
   } catch (e) {

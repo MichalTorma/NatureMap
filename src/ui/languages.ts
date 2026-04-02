@@ -47,7 +47,9 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
       if (!info) return;
       const chip = document.createElement('div');
       chip.className = 'language-chip';
-      const nativeName = info.nativeName.split(',')[0].trim();
+      let displayName = info.nativeName.split(',')[0].trim();
+      if (code === 'la') displayName = 'Scientific Name (Latin)';
+      
       let btns = '';
       if (idx > 0)
         btns += `<button class="lang-chip-move" data-dir="up" title="Move up">${getIconSvg('chevron-up')}</button>`;
@@ -56,7 +58,7 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
       btns += `<button class="lang-chip-remove" title="Remove">${getIconSvg('x')}</button>`;
       chip.innerHTML = `
         <span class="lang-chip-code">${code.toUpperCase()}</span>
-        <span class="lang-chip-name">${nativeName}</span>
+        <span class="lang-chip-name">${displayName}</span>
         <span class="lang-chip-actions">${btns}</span>
       `;
       chip.querySelector('[data-dir="up"]')?.addEventListener('click', () => {

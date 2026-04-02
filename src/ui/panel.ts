@@ -150,7 +150,12 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
         .forEach(async (s: any) => {
           const li = document.createElement('li');
           const rankHtml = s.rank ? `<span class="scientific-rank">${s.rank}</span>` : '';
-          const nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
+          
+          // Determine best primary name for this result
+          let nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
+          if (state.userLanguages[0] === 'la') {
+            nameToUse = s.scientificName || s.canonicalName;
+          }
 
           li.innerHTML = `
             <div class="search-avatar">${getIconSvg('leaf')}</div>

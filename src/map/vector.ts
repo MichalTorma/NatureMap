@@ -5,7 +5,7 @@ import {
   gbifThumb, 
   resolveWikidataInfo, 
   resolveVernacularNames, 
-  resolveDatasetName 
+  resolveDatasetName
 } from './gbif';
 import { scheduleVectorPopupFit } from './core';
 import { getIconSvg } from '../ui/icons';
@@ -115,25 +115,66 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
         marker.on('popupopen', async () => {
           scheduleVectorPopupFit(map, marker);
           
-          const vernaculars = await resolveVernacularNames(occ.taxonKey, state.userLanguages);
-          const wiki = await resolveWikidataInfo(occ.taxonKey);
+          const taxonKey = occ.taxonKey || occ.speciesKey || occ.usageKey;
+          const cachedVernaculars = await resolveVernacularNames(taxonKey);
+          // Always work with a fresh copy to avoid mutating the worldwide cache
+          const localVernaculars = [...cachedVernaculars];
+          
+          const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
           const datasetName = await resolveDatasetName(occ.datasetKey);
           
           const gbifImg = media ? gbifThumb(occ.key, media) : null;
           let currentImg = gbifImg || (wiki ? wiki.imgUrl : null);
-          const hasVn = vernaculars && vernaculars.length > 0;
-          const vnHtml = hasVn ? `<div class="vernacular-popup">${vernaculars[0].name}</div>` : '';
+
+          // Merge labels from Wikidata with HIGHER priority than GBIF
+          if (wiki && wiki.labels) {
+            for (const [lc, name] of Object.entries(wiki.labels)) {
+              // Prepend Wikidata names to favor them over potentially mislabeled GBIF records
+              localVernaculars.unshift({ lang: lc, name });
+            }
+          }
+
+          // Identify all names matching the user's preference list in order
+          const preferredNames: { name: string, lang: string, isScientific: boolean }[] = [];
+          for (const lc of state.userLanguages) {
+            if (lc === 'la') {
+              preferredNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
+            } else {
+              const match = localVernaculars.find(v => v.lang === lc);
+              if (match) {
+                // If the "common" name is literally the scientific name, treat it as such
+                const isSci = match.name.toLowerCase() === occ.scientificName.toLowerCase();
+                preferredNames.push({ name: match.name, lang: lc, isScientific: isSci });
+              }
+            }
+          }
+
+
+          // The first preferred match is our primary title
+          const best = preferredNames[0] || { name: occ.scientificName, lang: 'la', isScientific: true };
+          
+          // All other preferred matches (plus scientific if not primary) form the subtitle list
+          const subtitleNames = preferredNames.filter(n => n !== best);
+          if (!best.isScientific && !subtitleNames.find(n => n.isScientific)) {
+            subtitleNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
+          }
+
+          const vnHtml = subtitleNames.map(n => 
+            `<div class="vernacular-popup" ${n.isScientific ? 'style="font-style: italic; opacity: 0.7;"' : ''}>
+              ${n.lang !== 'la' ? `<span class="lang-tag">${n.lang.toUpperCase()}</span> ` : ''}${n.name}
+            </div>`
+          ).join('');
 
           const content = document.createElement('div');
           content.className = 'vector-popup';
           content.innerHTML = `
             ${currentImg ? `<div class="popup-image-container">
-                <img src="${currentImg}" alt="${occ.scientificName}">
+                <img src="${currentImg}" alt="${best.name}">
                 ${(gbifImg && wiki?.imgUrl) ? `<button class="switch-image-btn" title="Switch Image Source">${getIconSvg('refresh-cw')}</button>` : ''}
                 <div class="image-source-badge">${currentImg === gbifImg ? 'GBIF' : 'WIKI'}</div>
               </div>` : ''}
-            <div class="title">${occ.scientificName}</div>
-            ${vnHtml}
+            <div class="title" ${best.isScientific ? 'style="font-style: italic;"' : ''}>${best.name}</div>
+            <div class="subtitle-group">${vnHtml}</div>
             <div class="popup-details">
               <div class="popup-detail">${getIconSvg('calendar')}<span>${occ.eventDate ? new Date(occ.eventDate).toLocaleDateString() : 'Unknown date'}</span></div>
               <div class="popup-detail">${getIconSvg('database')}<span>${datasetName || 'GBIF.org'}</span></div>
@@ -143,6 +184,10 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
               ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" class="wiki-link">${getIconSvg('book-open')} Wiki</a>` : ''}
             </div>
           `;
+
+
+
+
 
           const switchBtn = content.querySelector('.switch-image-btn');
           const badge = content.querySelector('.image-source-badge');
