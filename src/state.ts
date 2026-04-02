@@ -1,84 +1,100 @@
-import type { AppConfig, VectorMarkerEntry } from './types';
+import type L from 'leaflet';
+import type { AppConfig } from './types';
 
-export const STORAGE_KEY_CENTER = 'mymap_center';
-export const STORAGE_KEY_ZOOM = 'mymap_zoom';
-export const STORAGE_KEY_LANGS = 'mymap_user_langs';
-export const STORAGE_KEY_BASE = 'mymap_base_layer';
-export const STORAGE_KEY_OVERLAYS = 'mymap_overlays';
+export type RenderMode = 'point' | 'hex' | 'square' | 'marker' | 'circles';
+
+export const STORAGE_KEY_CENTER = 'gbif_center';
+export const STORAGE_KEY_ZOOM = 'gbif_zoom';
+export const STORAGE_KEY_BASE = 'gbif_base';
+export const STORAGE_KEY_OVERLAYS = 'gbif_overlays';
+export const STORAGE_KEY_LANGS = 'gbif_langs';
 
 export class AppState {
-  config: AppConfig;
-  gbifEnabled = true;
+  // GBIF Rendering States
+  gbifEnabled: boolean = true;
   currentTaxonKey: number | null = null;
   currentYear: number | 'ALL' = 'ALL';
-  currentDensity = 40;
-  currentOpacity = 0.85;
-  currentShape = 'hex';
-  currentScaleMode: 'static' | 'geographic' = 'static';
-  currentPalette = 'classic';
   currentOrigins: string[] = ['ALL'];
+  currentOpacity: number = 0.8;
+  currentDensity: number = 40;
+  currentScaleMode: 'static' | 'geographic' = 'geographic';
+  currentPalette: string = 'classic';
+  currentRenderMode: RenderMode = 'hex';
+  currentNoBorders: boolean = false;
 
-  userLanguages: string[] = ['en'];
-  
-  // Layer State
-  currentBaseLayer: string = 'osm-voyager';
+  // Base Layers & Overlays
+  currentBaseLayer: string;
   activeOverlayIds: Set<string> = new Set();
+  baseLayerInstances: Record<string, L.Layer> = {};
+  overlayInstances: Record<string, L.Layer> = {};
 
-  // Layer Instances
-  baseLayerInstances: Record<string, any> = {};
-  overlayInstances: Record<string, any> = {};
+  // User Preferences & Data
+  userLanguages: string[] = ['en'];
+  vectorMarkers: any[] = [];
   gbifLayer: any = null;
-
-  // Search Results
-  vectorMarkers: VectorMarkerEntry[] = [];
-  
-  urlParams: URLSearchParams;
+  config: AppConfig;
 
   constructor(config: AppConfig) {
     this.config = config;
-    this.urlParams = new URLSearchParams(window.location.search);
+    this.currentBaseLayer = localStorage.getItem(STORAGE_KEY_BASE) || (config.baseLayers[0]?.id || 'osm');
     
-    // Default base layer from config if available
-    const activeBase = config.baseLayers.find(l => l.active);
-    if (activeBase) this.currentBaseLayer = activeBase.id;
-
-    // Load state from Storage or URL
-    const taxonParam = this.urlParams.get('taxon');
-    if (taxonParam) this.currentTaxonKey = parseInt(taxonParam, 10);
-
     const savedLangs = localStorage.getItem(STORAGE_KEY_LANGS);
-    if (savedLangs) this.userLanguages = JSON.parse(savedLangs);
-    else this.userLanguages = navigator.languages.map(l => l.split('-')[0]);
-
-    const savedOpacity = localStorage.getItem('mymap_opacity');
-    if (savedOpacity) this.currentOpacity = parseFloat(savedOpacity);
-
-    const savedBase = localStorage.getItem(STORAGE_KEY_BASE);
-    if (savedBase) this.currentBaseLayer = savedBase;
-
-    const savedOverlays = localStorage.getItem(STORAGE_KEY_OVERLAYS);
-    if (savedOverlays) this.activeOverlayIds = new Set(JSON.parse(savedOverlays));
-    else {
-      config.overlays.filter(o => o.active).forEach(o => this.activeOverlayIds.add(o.id));
+    if (savedLangs) {
+      try { this.userLanguages = JSON.parse(savedLangs); } catch (e) {}
     }
+    const savedOverlays = localStorage.getItem(STORAGE_KEY_OVERLAYS);
+    if (savedOverlays) {
+      try { 
+        const ids = JSON.parse(savedOverlays);
+        if (Array.isArray(ids)) this.activeOverlayIds = new Set(ids);
+      } catch (e) {}
+    }
+    
+    this.loadFromURL();
   }
 
-  syncStateToURL(map?: any) {
-    const url = new URL(window.location.href);
-    if (this.currentTaxonKey) url.searchParams.set('taxon', this.currentTaxonKey.toString());
-    else url.searchParams.delete('taxon');
+  syncStateToURL(map?: L.Map) {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    if (this.currentTaxonKey) params.set('taxon', this.currentTaxonKey.toString());
+    else params.delete('taxon');
+    
+    params.set('palette', this.currentPalette);
+    params.set('mode', this.currentRenderMode);
+    if (this.currentNoBorders) params.set('noborder', '1');
+    else params.delete('noborder');
+    
+    params.set('year', this.currentYear.toString());
+    params.set('density', this.currentDensity.toString());
+    params.set('scale', this.currentScaleMode);
 
     if (map) {
       const center = map.getCenter();
-      url.searchParams.set('lat', center.lat.toFixed(6));
-      url.searchParams.set('lng', center.lng.toFixed(6));
-      url.searchParams.set('zoom', map.getZoom().toString());
+      params.set('lat', center.lat.toFixed(4));
+      params.set('lng', center.lng.toFixed(4));
+      params.set('z', map.getZoom().toString());
     }
-
-    window.history.replaceState({}, '', url.toString());
     
-    // Save to local storage
-    localStorage.setItem(STORAGE_KEY_BASE, this.currentBaseLayer);
-    localStorage.setItem(STORAGE_KEY_OVERLAYS, JSON.stringify(Array.from(this.activeOverlayIds)));
+    window.location.hash = params.toString();
+  }
+
+  private loadFromURL() {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const taxon = params.get('taxon');
+    if (taxon) this.currentTaxonKey = parseInt(taxon);
+    
+    this.currentPalette = params.get('palette') || 'classic';
+    const rawMode = params.get('mode');
+    if (rawMode) this.currentRenderMode = rawMode as RenderMode;
+    
+    this.currentNoBorders = params.has('noborder');
+    
+    const year = params.get('year');
+    if (year) this.currentYear = year === 'ALL' ? 'ALL' : parseInt(year);
+    
+    const density = params.get('density');
+    if (density) this.currentDensity = parseInt(density);
+    
+    const scale = params.get('scale');
+    if (scale === 'static' || scale === 'geographic') this.currentScaleMode = scale;
   }
 }

@@ -5,16 +5,46 @@ import { GbifLayerClass } from './gbif';
 export function initGbifLayerManager(map: L.Map, state: AppState) {
   const tilePixelRatio = Math.min(4, Math.ceil(window.devicePixelRatio || 1));
 
+  /**
+   * Strictly maps UI palette + renderMode + noBorders combination to API v2 style strings.
+   * Based on https://techdocs.gbif.org/en/openapi/v2/maps
+   */
+  const resolveGbifStyle = (palette: string, mode: string, noBorders: boolean): string => {
+    // 1. Special Rendering Modes
+    if (mode === 'circles') return 'scaled.circles';
+    if (mode === 'marker') return `${palette}.marker`;
+
+    // 2. Grids (Hex/Square)
+    if (mode === 'hex' || mode === 'square') {
+      const suffix = noBorders ? '-noborder' : '';
+      return `${palette}${suffix}.poly`;
+    }
+
+    // 3. Points & Heatmaps
+    // Ensure heat palettes use their correct .point suffix
+    const heatPalettes = ['purpleHeat', 'blueHeat', 'orangeHeat', 'greenHeat', 'fire', 'glacier'];
+    if (heatPalettes.includes(palette)) {
+      return `${palette}.point`;
+    }
+
+    return `${palette}.point`; // Fallback to standard point
+  };
+
   const buildGbifUrl = (): string => {
-    // Simplified style resolver or import it
-    const styleParam = `palette=${state.currentPalette}&styles=${state.currentShape === 'point' ? 'point' : 'poly'}`;
+    const mode = state.currentRenderMode;
+    
+    // Binning parameters (handled dynamically by GbifLayerClass in gbif.ts)
+    // We only provide the style string here.
+    const style = resolveGbifStyle(state.currentPalette, mode, state.currentNoBorders);
+    
     const yearParam = state.currentYear === 'ALL' ? '' : `&year=1900,${state.currentYear}`;
     let originParam = '';
     if (!state.currentOrigins.includes('ALL')) {
       originParam = state.currentOrigins.map(o => `&basisOfRecord=${o}`).join('');
     }
     const taxonParam = state.currentTaxonKey ? `&taxonKey=${state.currentTaxonKey}` : '';
-    return `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@${tilePixelRatio}x.png?srs=EPSG:3857&style=${styleParam}${taxonParam}${yearParam}${originParam}`;
+    
+    return `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@${tilePixelRatio}x.png?srs=EPSG:3857&style=${style}${taxonParam}${yearParam}${originParam}`;
   };
 
   const updateGbifLayer = () => {
@@ -22,8 +52,13 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
     if (!state.gbifEnabled) return;
     
     const url = buildGbifUrl();
-    const isBinned = state.currentShape === 'hex' || state.currentShape === 'square';
-    const maxNative = isBinned ? (state.currentScaleMode === 'geographic' ? 17 : 14) : 17;
+    const isBinned = state.currentRenderMode === 'hex' || state.currentRenderMode === 'square';
+    const isSpecial = state.currentRenderMode === 'circles' || state.currentRenderMode === 'marker';
+    
+    // Zoom limits based on mode
+    let maxNative = 17;
+    if (isBinned) maxNative = state.currentScaleMode === 'geographic' ? 17 : 14;
+    if (isSpecial) maxNative = 12;
 
     state.gbifLayer = new (GbifLayerClass as any)(url, {
       opacity: state.currentOpacity,
@@ -33,7 +68,7 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
       tileSize: 512,
       zoomOffset: -1,
       maxNativeZoom: maxNative,
-      gbifShape: state.currentShape,
+      gbifShape: state.currentRenderMode,
       gbifDensity: state.currentDensity,
       gbifGridMode: state.currentScaleMode,
       errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='

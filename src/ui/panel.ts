@@ -1,10 +1,38 @@
 import type L from 'leaflet';
 import { AppState } from '../state';
+import type { RenderMode } from '../state';
 import { getIconSvg } from './icons';
 import { 
   type TaxonHistory 
 } from '../map/gbif';
 import { showErrorToast } from './toasts';
+
+/**
+ * GBIF Style Registry
+ * Defines which rendering modes are compatible with each technical palette.
+ */
+const STYLE_REGISTRY: Record<string, RenderMode[]> = {
+  // Standard Grids (Point + Poly)
+  classic: ['point', 'hex', 'square'],
+  green: ['point', 'hex', 'square'],
+  purpleYellow: ['point', 'hex', 'square'],
+  green2: ['point', 'hex', 'square'],
+  iNaturalist: ['point', 'hex', 'square'],
+  purpleWhite: ['point', 'hex', 'square'],
+  red: ['point', 'hex', 'square'],
+  // Heatmaps (Point only)
+  purpleHeat: ['point'],
+  blueHeat: ['point'],
+  orangeHeat: ['point'],
+  greenHeat: ['point'],
+  fire: ['point'],
+  glacier: ['point'],
+  // Markers
+  blue: ['marker'],
+  orange: ['marker'],
+  // Outline
+  outline: ['hex', 'square']
+};
 
 export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () => void) {
   const gbifPanel = document.getElementById('gbif-panel');
@@ -18,6 +46,11 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   const gbifYearInput = document.getElementById('gbif-year') as HTMLInputElement;
   const yearValueDisplay = document.getElementById('year-value') as HTMLElement;
   const opacityInput = document.getElementById('gbif-opacity') as HTMLInputElement;
+  const densityInput = document.getElementById('gbif-density') as HTMLInputElement;
+  const densityValueDisplay = document.getElementById('density-value');
+  const advancedToggle = document.getElementById('advanced-toggle');
+  const advancedDrawer = document.getElementById('advanced-drawer');
+  const noBordersToggle = document.getElementById('gbif-noborders') as HTMLInputElement;
 
   let currentHistory: TaxonHistory[] = JSON.parse(localStorage.getItem('gbif_history') || '[]');
   let searchGeneration = 0;
@@ -128,7 +161,7 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
       gbifResults.style.display = 'block';
 
       suggestions.sort((a: any, b: any) => (RANK_ORDER[a.rank] ?? 10) - (RANK_ORDER[b.rank] ?? 10))
-        .forEach((s: any) => {
+        .forEach(async (s: any) => {
           const li = document.createElement('li');
           const rankHtml = s.rank ? `<span class="scientific-rank">${s.rank}</span>` : '';
           const nameToUse = s.vernacularName || s.canonicalName || s.scientificName;
@@ -142,7 +175,7 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
             </div>
             <div class="vernacular-names"></div>
             <div class="obs-count">
-              ${getIconSvg('loader-2')}
+              <span class="obs-loader">${getIconSvg('loader-2')}</span>
               <span class="obs-count-text">...</span>
             </div>
           `;
@@ -156,6 +189,21 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
             updateGbifLayer();
           });
           gbifResults.appendChild(li);
+          
+          try {
+            const countUrl = `https://api.gbif.org/v1/occurrence/count?taxonKey=${s.key}`;
+            const cRes = await fetch(countUrl);
+            const count = await cRes.json();
+            if (gen !== searchGeneration) return;
+            const countText = li.querySelector('.obs-count-text');
+            const loader = li.querySelector('.obs-loader');
+            if (countText && loader) {
+              loader.innerHTML = count > 0 ? getIconSvg('check-circle') : getIconSvg('x-circle');
+              loader.classList.toggle('found', count > 0);
+              loader.classList.toggle('not-found', count === 0);
+              countText.textContent = count > 1000 ? (count/1000).toFixed(1) + 'k records' : count + ' records';
+            }
+          } catch (e) {}
         });
     } catch (e) {
       showErrorToast('Species search failed');
@@ -166,6 +214,83 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
     const query = gbifSearch.value.trim();
     if (query.length < 2) { gbifResults.style.display = 'none'; return; }
     setTimeout(() => fetchGbif(query), 300);
+  });
+
+  const pickers = {
+    mode: document.querySelectorAll('#gbif-mode-picker .mode-btn'),
+    palette: document.querySelectorAll('.palette-btn'),
+    scale: document.querySelectorAll('#gbif-scale-mode .toggle-btn')
+  };
+
+  /**
+   * Refined UI compatibility logic.
+   * Enables/Disables modes based on the palette capabilities.
+   */
+  const updateStyleCompatibility = () => {
+    const compatibleModes = STYLE_REGISTRY[state.currentPalette] || ['point'];
+    
+    // Update Mode Buttons
+    pickers.mode.forEach(btn => {
+      const mode = (btn as HTMLElement).dataset.mode as RenderMode;
+      const isAvailable = compatibleModes.includes(mode) || mode === 'circles'; // Circles is special
+      btn.classList.toggle('unsupported', !isAvailable);
+      btn.classList.toggle('active', state.currentRenderMode === mode);
+    });
+
+    // If current mode became unsupported, switch to the first compatible one
+    if (!compatibleModes.includes(state.currentRenderMode) && state.currentRenderMode !== 'circles') {
+      state.currentRenderMode = compatibleModes[0];
+      pickers.mode.forEach(btn => {
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.mode === state.currentRenderMode);
+      });
+    }
+
+    // Toggle NoBorders visibility
+    const isPoly = state.currentRenderMode === 'hex' || state.currentRenderMode === 'square';
+    const nobordersContainer = noBordersToggle?.closest('.control-group') as HTMLElement;
+    if (nobordersContainer) nobordersContainer.style.display = isPoly ? '' : 'none';
+  };
+
+  pickers.mode.forEach(btn => btn.addEventListener('click', () => {
+    const mode = (btn as HTMLElement).dataset.mode as RenderMode;
+    if (mode && !btn.classList.contains('unsupported')) {
+      state.currentRenderMode = mode;
+      pickers.mode.forEach(b => b.classList.toggle('active', b === btn));
+      updateStyleCompatibility();
+      updateGbifLayer();
+    }
+  }));
+
+  pickers.palette.forEach(btn => btn.addEventListener('click', () => {
+    const palette = (btn as HTMLElement).dataset.palette;
+    if (palette) {
+      state.currentPalette = palette;
+      pickers.palette.forEach(b => b.classList.toggle('active', b === btn));
+      updateStyleCompatibility();
+      updateGbifLayer();
+    }
+  }));
+
+  noBordersToggle?.addEventListener('change', () => {
+    state.currentNoBorders = noBordersToggle.checked;
+    updateGbifLayer();
+  });
+
+  pickers.scale.forEach(btn => btn.addEventListener('click', () => {
+    const val = (btn as HTMLElement).dataset.mode;
+    if (val) {
+       state.currentScaleMode = val as 'static' | 'geographic';
+       pickers.scale.forEach(b => b.classList.toggle('active', b === btn));
+       updateGbifLayer();
+    }
+  }));
+
+  advancedToggle?.addEventListener('click', () => {
+    if (advancedDrawer) {
+      const isHidden = advancedDrawer.style.display === 'none';
+      advancedDrawer.style.display = isHidden ? 'block' : 'none';
+      advancedToggle.classList.toggle('open', isHidden);
+    }
   });
 
   gbifYearInput.addEventListener('input', () => {
@@ -180,6 +305,15 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
     if (state.gbifLayer) state.gbifLayer.setOpacity(state.currentOpacity);
   });
 
+  densityInput.addEventListener('input', () => {
+    state.currentDensity = parseInt(densityInput.value);
+    if (densityValueDisplay) densityValueDisplay.textContent = `${state.currentDensity} Bins`;
+  });
+  densityInput.addEventListener('change', updateGbifLayer);
+
+  // Initial Sync
+  noBordersToggle.checked = state.currentNoBorders;
+  updateStyleCompatibility();
   renderHistory();
 
   return { openGbifPanel, closeGbifPanel };

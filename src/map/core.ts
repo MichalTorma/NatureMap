@@ -60,7 +60,8 @@ export const fitVectorPopupInView = (map: L.Map, marker: L.Marker, gen: number) 
 };
 
 export function initMapCore(state: AppState) {
-  const { urlParams, config } = state;
+  const { config } = state;
+  const urlParams = new URLSearchParams(window.location.hash.slice(1));
   const savedCenter = localStorage.getItem(STORAGE_KEY_CENTER);
   const savedZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
 

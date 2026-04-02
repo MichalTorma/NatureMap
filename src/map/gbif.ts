@@ -56,14 +56,16 @@ export const GbifLayerClass = L.TileLayer.extend({
             const baseSize = 4096 / baseDensity;
             const scaledSize = Math.min(4096, baseSize * Math.pow(2, z));
             const p2 = Math.pow(2, Math.round(Math.log2(scaledSize)));
-            url += `&bin=square&squareSize=${p2}`;
+            const validP2 = Math.max(2, Math.min(4096, p2));
+            url += `&bin=square&squareSize=${validP2}`;
         }
     } else {
         if (shape === 'hex') url += `&bin=hex&hexPerTile=${baseDensity}`;
         if (shape === 'square') {
             const baseSize = 4096 / baseDensity;
             const p2 = Math.pow(2, Math.round(Math.log2(baseSize)));
-            url += `&bin=square&squareSize=${p2}`;
+            const validP2 = Math.max(2, Math.min(4096, p2));
+            url += `&bin=square&squareSize=${validP2}`;
         }
     }
     return url;
