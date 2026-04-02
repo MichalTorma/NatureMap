@@ -1,0 +1,197 @@
+/* ============ Toasts ============ */
+.geo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 5000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+  width: calc(100vw - 32px);
+  max-width: 420px;
+}
+
+.geo-toast.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.geo-toast-inner {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  color: var(--text-color);
+  font-family: var(--font-family);
+}
+
+.geo-toast-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.geo-toast-header svg { width: 20px; height: 20px; color: #f87171; flex-shrink: 0; }
+.geo-toast-header strong { flex: 1; font-size: 0.95rem; color: #f87171; }
+
+.geo-toast-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.geo-toast-close:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.geo-toast-close svg { width: 14px; height: 14px; }
+
+.geo-toast-inner p {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.geo-toast-inner ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.geo-toast-inner li {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .geo-toast { bottom: 90px; }
+}
+
+.error-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  z-index: 6000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+  max-width: 400px;
+  width: calc(100vw - 32px);
+}
+.error-toast.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.error-toast-inner {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-family);
+  color: var(--text-color);
+  font-size: 0.85rem;
+}
+.error-toast-inner svg { width: 18px; height: 18px; color: #f87171; flex-shrink: 0; }
+.error-toast-inner span { flex: 1; }
+
+/* ============ Welcome Card ============ */
+.welcome-card {
+  position: fixed;
+  inset: 0;
+  z-index: 7000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity 0.3s;
+}
+.welcome-card.hidden { opacity: 0; pointer-events: none; }
+.welcome-card-inner {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  padding: 32px 28px 28px;
+  max-width: 380px;
+  width: calc(100vw - 48px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  font-family: var(--font-family);
+}
+.welcome-card-inner h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 10px;
+  letter-spacing: 0.5px;
+}
+.welcome-card-inner p {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.welcome-card-inner ul {
+  text-align: left;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.welcome-card-inner li {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+  padding-left: 18px;
+  position: relative;
+  line-height: 1.4;
+}
+.welcome-card-inner li::before {
+  content: '•';
+  position: absolute;
+  left: 4px;
+  color: var(--accent-color);
+  font-weight: bold;
+}
+.welcome-dismiss-btn {
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 28px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.welcome-dismiss-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
