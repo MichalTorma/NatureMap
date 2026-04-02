@@ -50,6 +50,16 @@ async function initMap() {
     // Initial layer load
     updateGbifLayer();
 
+    // Hide splash screen with a smooth transition
+    setTimeout(() => {
+      const splash = document.getElementById('splash-screen');
+      if (splash) {
+        splash.classList.add('hidden');
+        // Remove from DOM after transition for performance
+        setTimeout(() => splash.remove(), 1000);
+      }
+    }, 800);
+
   } catch (error) {
     console.error('Error initializing map:', error);
     showErrorToast('Failed to load app configuration.');
