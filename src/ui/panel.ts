@@ -6,6 +6,7 @@ import {
   type TaxonHistory 
 } from '../map/gbif';
 import { showErrorToast } from './toasts';
+import { describeFetchFailure, getLastHealthSnapshot } from '../health/external-status';
 
 /**
  * GBIF Shape Registry
@@ -138,10 +139,29 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   const fetchGbif = async (query: string) => {
     const gen = ++searchGeneration;
     try {
-      const res = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c&limit=8`);
-      const suggestions = await res.json();
+      const suggestUrl = `https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&datasetKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c&limit=8`;
+      const res = await fetch(suggestUrl);
       if (gen !== searchGeneration) return;
-      
+      if (!res.ok) {
+        console.error('GBIF species suggest failed', { suggestUrl, status: res.status });
+        showErrorToast(describeFetchFailure('gbif', null, res, getLastHealthSnapshot()));
+        return;
+      }
+      let suggestions: any[];
+      try {
+        suggestions = await res.json();
+      } catch (parseErr) {
+        console.error('GBIF species suggest: invalid JSON', { suggestUrl, error: parseErr });
+        showErrorToast(describeFetchFailure('gbif', parseErr, res, getLastHealthSnapshot()));
+        return;
+      }
+      if (gen !== searchGeneration) return;
+      if (!Array.isArray(suggestions)) {
+        console.error('GBIF species suggest: expected array', { suggestUrl, body: suggestions });
+        showErrorToast('Species search returned an unexpected response.');
+        return;
+      }
+
       gbifResults.innerHTML = '';
       if (suggestions.length === 0) { gbifResults.style.display = 'none'; return; }
       gbifResults.style.display = 'block';
@@ -184,20 +204,54 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
           try {
             const countUrl = `https://api.gbif.org/v1/occurrence/count?taxonKey=${s.key}`;
             const cRes = await fetch(countUrl);
-            const count = await cRes.json();
             if (gen !== searchGeneration) return;
             const countText = li.querySelector('.obs-count-text');
             const loader = li.querySelector('.obs-loader');
+            if (!cRes.ok) {
+              console.error('GBIF occurrence count failed', { countUrl, status: cRes.status, taxonKey: s.key });
+              if (countText && loader) {
+                loader.innerHTML = getIconSvg('alert-circle');
+                loader.classList.remove('found', 'not-found');
+                countText.textContent = '—';
+              }
+              return;
+            }
+            const countPayload = await cRes.json();
+            const count = typeof countPayload === 'number' ? countPayload : countPayload?.count;
+            if (typeof count !== 'number' || !Number.isFinite(count)) {
+              console.error('GBIF occurrence count: unexpected body', { countUrl, taxonKey: s.key, countPayload });
+              if (countText && loader) {
+                loader.innerHTML = getIconSvg('alert-circle');
+                loader.classList.remove('found', 'not-found');
+                countText.textContent = '—';
+              }
+              return;
+            }
+            if (gen !== searchGeneration) return;
             if (countText && loader) {
               loader.innerHTML = count > 0 ? getIconSvg('check-circle') : getIconSvg('x-circle');
               loader.classList.toggle('found', count > 0);
               loader.classList.toggle('not-found', count === 0);
               countText.textContent = count > 1000 ? (count/1000).toFixed(1) + 'k records' : count + ' records';
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('GBIF occurrence count error', { taxonKey: s.key, error: e });
+            const countText = li.querySelector('.obs-count-text');
+            const loader = li.querySelector('.obs-loader');
+            if (countText && loader) {
+              loader.innerHTML = getIconSvg('alert-circle');
+              loader.classList.remove('found', 'not-found');
+              countText.textContent = '—';
+            }
+          }
         });
     } catch (e) {
-      showErrorToast('Species search failed');
+      console.error('Species search error', { error: e });
+      showErrorToast(
+        e instanceof Error
+          ? describeFetchFailure('gbif', e, null, getLastHealthSnapshot())
+          : describeFetchFailure('gbif', new Error(String(e)), null, getLastHealthSnapshot()),
+      );
     }
   };
 

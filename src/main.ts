@@ -19,10 +19,12 @@ import { initVectorSearch } from './map/vector';
 import { initIcons } from './ui/icons';
 import { showErrorToast } from './ui/toasts';
 import { initGbifLayerManager } from './map/gbif-manager';
+import { initExternalStatusUi } from './ui/external-status-ui';
 
 async function initMap() {
   try {
     initIcons();
+    initExternalStatusUi();
     const response = await fetch('/config.json');
     if (!response.ok) throw new Error('Failed to load config.json');
     const config = await response.json();

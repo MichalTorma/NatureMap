@@ -10,6 +10,7 @@ import {
 import { scheduleVectorPopupFit } from './core';
 import { getIconSvg } from '../ui/icons';
 import { showErrorToast } from '../ui/toasts';
+import { describeFetchFailure, getLastHealthSnapshot } from '../health/external-status';
 
 export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLegend: () => void) {
   const searchAreaBtn = document.getElementById('search-area-btn');
@@ -235,9 +236,27 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
 
     try {
       // 1. Initial pre-fetch to get count
-      const countRes = await fetch(`${url}&limit=0`);
-      const countData = await countRes.json();
+      const countUrl = `${url}&limit=0`;
+      const countRes = await fetch(countUrl);
+      if (!countRes.ok) {
+        console.error('GBIF occurrence search (count) failed', { countUrl, status: countRes.status });
+        showErrorToast(describeFetchFailure('gbif', null, countRes, getLastHealthSnapshot()));
+        return;
+      }
+      let countData: { count?: number };
+      try {
+        countData = await countRes.json();
+      } catch (parseErr) {
+        console.error('GBIF occurrence search: invalid count JSON', { countUrl, error: parseErr });
+        showErrorToast(describeFetchFailure('gbif', parseErr, countRes, getLastHealthSnapshot()));
+        return;
+      }
       const totalCount = countData.count;
+      if (typeof totalCount !== 'number' || !Number.isFinite(totalCount)) {
+        console.error('GBIF occurrence search: missing or invalid count', { countUrl, countData });
+        showErrorToast('Could not read occurrence count from GBIF.');
+        return;
+      }
 
       if (totalCount === 0) {
         showErrorToast('No occurrences found in this area.');
@@ -265,14 +284,35 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       hideLegendFab();
       searchAreaBtn.classList.add('loading');
 
-      while (loaded < maxToLoad) {
+      let pageError = false;
+      while (loaded < maxToLoad && !pageError) {
         if (btnSpan) btnSpan.textContent = `Loading ${loaded} / ${maxToLoad}...`;
         if (progressBar) progressBar.style.width = `${(loaded / maxToLoad) * 100}%`;
 
         const pageUrl = `${url}&limit=${limit}&offset=${loaded}`;
         const res = await fetch(pageUrl);
-        const data = await res.json();
-        
+        if (!res.ok) {
+          console.error('GBIF occurrence search page failed', { pageUrl, status: res.status });
+          showErrorToast(describeFetchFailure('gbif', null, res, getLastHealthSnapshot()));
+          pageError = true;
+          break;
+        }
+        let data: { results?: unknown; endOfRecords?: boolean };
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          console.error('GBIF occurrence search: invalid page JSON', { pageUrl, error: parseErr });
+          showErrorToast(describeFetchFailure('gbif', parseErr, res, getLastHealthSnapshot()));
+          pageError = true;
+          break;
+        }
+        if (!Array.isArray(data.results)) {
+          console.error('GBIF occurrence search: missing results array', { pageUrl, data });
+          showErrorToast('GBIF returned an unexpected response while loading occurrences.');
+          pageError = true;
+          break;
+        }
+
         processOccurrences(data.results);
         loaded += data.results.length;
 
@@ -282,6 +322,8 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       if (btnSpan) btnSpan.textContent = 'Search this area';
       if (progressBar) progressBar.style.width = '0%';
       searchAreaBtn.classList.remove('loading');
+
+      if (pageError) return;
 
       if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
       if (searchAreaBtn) searchAreaBtn.classList.add('hidden');
@@ -296,8 +338,12 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
 
       updateTaxonomyLegend();
     } catch (e) {
-      console.error(e);
-      showErrorToast('Area search failed');
+      console.error('Area search failed', { error: e });
+      showErrorToast(
+        e instanceof Error
+          ? describeFetchFailure('gbif', e, null, getLastHealthSnapshot())
+          : describeFetchFailure('gbif', new Error(String(e)), null, getLastHealthSnapshot()),
+      );
       if (searchAreaBtn) searchAreaBtn.classList.remove('loading');
     }
   });

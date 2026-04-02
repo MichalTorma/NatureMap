@@ -76,6 +76,20 @@
       <button id="locate-btn" class="layer-fab" aria-label="Find My Location" title="Find My Location">
         <i data-lucide="locate"></i>
       </button>
+      <div class="external-status-wrap">
+        <button type="button" id="external-status-btn" class="layer-fab external-status-fab" aria-label="External services status" aria-expanded="false" aria-controls="external-status-popover">
+          <span id="external-status-dot" class="external-status-dot unknown" aria-hidden="true"></span>
+          <span id="external-status-label" class="external-status-label">Services</span>
+        </button>
+        <div id="external-status-popover" class="external-status-popover" role="region" aria-label="External service checks">
+          <div class="external-status-popover-header">
+            <h3 class="external-status-title">External services</h3>
+            <button type="button" id="external-status-refresh" class="external-status-refresh">Refresh</button>
+          </div>
+          <p id="external-status-summary" class="external-status-summary"></p>
+          <div id="external-status-list" class="external-status-list"></div>
+        </div>
+      </div>
       <div class="menu-container">
         <div class="layer-stack-items">
           <!-- GBIF Quick Control Row -->

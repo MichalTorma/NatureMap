@@ -1,6 +1,8 @@
 import L from 'leaflet';
 import { AppState } from '../state';
 import { GbifLayerClass } from './gbif';
+import { recordGbifMapTileError, shouldShowGbifTileFailureToast } from '../health/external-status';
+import { showErrorToast } from '../ui/toasts';
 
 export function initGbifLayerManager(map: L.Map, state: AppState) {
   const tilePixelRatio = Math.min(4, Math.ceil(window.devicePixelRatio || 1));
@@ -70,6 +72,15 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
       gbifDensity: state.currentDensity,
       errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
     }).addTo(map);
+
+    state.gbifLayer.on('tileerror', () => {
+      recordGbifMapTileError();
+      if (shouldShowGbifTileFailureToast()) {
+        showErrorToast(
+          'Biodiversity map tiles failed to load. GBIF may be unavailable — open Services for details or see https://www.gbif.org/system-health',
+        );
+      }
+    });
     
     state.syncStateToURL();
   };
