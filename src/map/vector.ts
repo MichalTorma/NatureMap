@@ -80,154 +80,213 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
     document.getElementById('vector-legend')?.classList.remove('open');
   };
 
+  const confirmModal = document.getElementById('confirm-modal');
+  const confirmTitle = document.getElementById('confirm-title');
+  const confirmMessage = document.getElementById('confirm-message');
+  const confirmOk = document.getElementById('confirm-ok');
+  const confirmCancel = document.getElementById('confirm-cancel');
+
+  const showConfirm = (title: string, message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!confirmModal || !confirmTitle || !confirmMessage || !confirmOk || !confirmCancel) {
+        resolve(window.confirm(`${title}\n\n${message}`));
+        return;
+      }
+      confirmTitle.textContent = title;
+      confirmMessage.textContent = message;
+      confirmModal.classList.remove('hidden');
+
+      const cleanup = (value: boolean) => {
+        confirmModal.classList.add('hidden');
+        confirmOk.removeEventListener('click', okHandler);
+        confirmCancel.removeEventListener('click', cancelHandler);
+        resolve(value);
+      };
+
+      const okHandler = () => cleanup(true);
+      const cancelHandler = () => cleanup(false);
+
+      confirmOk.addEventListener('click', okHandler);
+      confirmCancel.addEventListener('click', cancelHandler);
+    });
+  };
+
+  const processOccurrences = (results: any[]) => {
+    results.forEach((occ: any) => {
+      if (!occ.decimalLatitude || !occ.decimalLongitude) return;
+      const media = occ.media?.find((m: any) => m.type === 'StillImage')?.identifier || '';
+      const hasImage = !!media;
+      const taxaInfo = getTaxaInfo(occ.class || occ.kingdom, hasImage);
+      const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
+        icon: taxaInfo.icon,
+        taxaCssClass: taxaInfo.cssClass
+      } as any).addTo(vectorLayer);
+      
+      const popup = L.popup({ maxWidth: 260, className: 'vector-popup' })
+        .setContent(`<div class="vector-popup-loading">${getIconSvg('loader-2')}</div>`);
+      marker.bindPopup(popup);
+
+      marker.on('popupopen', async () => {
+        scheduleVectorPopupFit(map, marker);
+        const taxonKey = occ.taxonKey || occ.speciesKey || occ.usageKey;
+        const cachedVernaculars = await resolveVernacularNames(taxonKey);
+        const localVernaculars = [...cachedVernaculars];
+        const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
+        const datasetName = await resolveDatasetName(occ.datasetKey);
+        const gbifImg = media ? gbifThumb(occ.key, media) : null;
+        let currentImg = gbifImg || (wiki ? wiki.imgUrl : null);
+
+        if (wiki && wiki.labels) {
+          for (const [lc, name] of Object.entries(wiki.labels)) {
+            localVernaculars.unshift({ lang: lc, name });
+          }
+        }
+
+        const preferredNames: { name: string, lang: string, isScientific: boolean }[] = [];
+        for (const lc of state.userLanguages) {
+          if (lc === 'la') {
+            preferredNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
+          } else {
+            const match = localVernaculars.find(v => v.lang === lc);
+            if (match) {
+              const isSci = match.name.toLowerCase() === occ.scientificName.toLowerCase();
+              preferredNames.push({ name: match.name, lang: lc, isScientific: isSci });
+            }
+          }
+        }
+
+        const best = preferredNames[0] || { name: occ.scientificName, lang: 'la', isScientific: true };
+        const subtitleNames = preferredNames.filter(n => n !== best);
+        if (!best.isScientific && !subtitleNames.find(n => n.isScientific)) {
+          subtitleNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
+        }
+
+        const vnHtml = subtitleNames.map(n => 
+          `<div class="vernacular-popup" ${n.isScientific ? 'style="font-style: italic; opacity: 0.7;"' : ''}>
+            ${n.lang !== 'la' ? `<span class="lang-tag">${n.lang.toUpperCase()}</span> ` : ''}${n.name}
+          </div>`
+        ).join('');
+
+        const content = document.createElement('div');
+        content.className = 'vector-popup';
+        content.innerHTML = `
+          ${currentImg ? `<div class="popup-image-container">
+              <img src="${currentImg}" alt="${best.name}">
+              ${(gbifImg && wiki?.imgUrl) ? `<button class="switch-image-btn" title="Switch Image Source">${getIconSvg('refresh-cw')}</button>` : ''}
+              <div class="image-source-badge">${currentImg === gbifImg ? 'GBIF' : 'WIKI'}</div>
+            </div>` : ''}
+          <div class="title" ${best.isScientific ? 'style="font-style: italic;"' : ''}>${best.name}</div>
+          <div class="subtitle-group">${vnHtml}</div>
+          <div class="popup-details">
+            <div class="popup-detail">${getIconSvg('calendar')}<span>${occ.eventDate ? new Date(occ.eventDate).toLocaleDateString() : 'Unknown date'}</span></div>
+            <div class="popup-detail">${getIconSvg('database')}<span>${datasetName || 'GBIF.org'}</span></div>
+          </div>
+          <div class="popup-links">
+            <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank">${getIconSvg('external-link')} GBIF</a>
+            ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" class="wiki-link">${getIconSvg('book-open')} Wiki</a>` : ''}
+          </div>
+        `;
+
+        const switchBtn = content.querySelector('.switch-image-btn');
+        const badge = content.querySelector('.image-source-badge');
+        const img = content.querySelector('img') as HTMLImageElement;
+        
+        switchBtn?.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (currentImg === gbifImg) {
+            currentImg = wiki?.imgUrl || gbifImg;
+            if (badge) badge.textContent = 'WIKI';
+          } else {
+            currentImg = gbifImg;
+            if (badge) badge.textContent = 'GBIF';
+          }
+          if (img) img.src = currentImg!;
+        });
+
+        popup.setContent(content);
+        scheduleVectorPopupFit(map, marker);
+      });
+      
+      state.vectorMarkers.push({
+        cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker,
+        taxonomy: {
+          kingdom: occ.kingdom || '', phylum: occ.phylum || '', class: occ.class || '',
+          order: occ.order || '', family: occ.family || '', genus: occ.genus || '',
+          species: occ.species || occ.scientificName || '',
+          kingdomKey: occ.kingdomKey, phylumKey: occ.phylumKey, classKey: occ.classKey,
+          orderKey: occ.orderKey, familyKey: occ.familyKey, genusKey: occ.genusKey,
+          speciesKey: occ.speciesKey
+        }
+      });
+    });
+  };
+
   searchAreaBtn?.addEventListener('click', async () => {
     if (!state.gbifEnabled) return;
     const bounds = map.getBounds();
     const south = Math.max(-90, bounds.getSouth()), north = Math.min(90, bounds.getNorth());
     const west = Math.max(-180, bounds.getWest()), east = Math.min(180, bounds.getEast());
 
-    let url = `https://api.gbif.org/v1/occurrence/search?decimalLatitude=${south},${north}&decimalLongitude=${west},${east}&limit=300&occurrenceStatus=PRESENT`;
+    const baseParams = `decimalLatitude=${south},${north}&decimalLongitude=${west},${east}&occurrenceStatus=PRESENT`;
+    let url = `https://api.gbif.org/v1/occurrence/search?${baseParams}`;
     if (state.currentYear !== 'ALL') url += `&year=1900,${state.currentYear}`;
     if (state.currentTaxonKey) url += `&taxonKey=${state.currentTaxonKey}`;
 
     try {
+      // 1. Initial pre-fetch to get count
+      const countRes = await fetch(`${url}&limit=0`);
+      const countData = await countRes.json();
+      const totalCount = countData.count;
+
+      if (totalCount === 0) {
+        showErrorToast('No occurrences found in this area.');
+        return;
+      }
+
+      // 2. Threshold check & Confirmation
+      if (totalCount > 300) {
+        const confirmed = await showConfirm(
+          'Load Large Dataset?',
+          `${totalCount.toLocaleString()} occurrences found. Loading all records will take some time. Tip: zoom in or use filters for faster results.`
+        );
+        if (!confirmed) return;
+      }
+
+      // 3. Start Loading
+      const progressBar = searchAreaBtn.querySelector('.search-progress-bar') as HTMLElement;
+      const btnSpan = searchAreaBtn.querySelector('span');
+      const limit = 300;
+      const maxToLoad = Math.min(totalCount, 10000);
+      let loaded = 0;
+
       vectorLayer.clearLayers();
       state.vectorMarkers = [];
       hideLegendFab();
-      
-      const res = await fetch(url);
-      const data = await res.json();
-      
-      data.results.forEach((occ: any) => {
-        if (!occ.decimalLatitude || !occ.decimalLongitude) return;
-        const media = occ.media?.find((m: any) => m.type === 'StillImage')?.identifier || '';
-        const hasImage = !!media;
-        const taxaInfo = getTaxaInfo(occ.class || occ.kingdom, hasImage);
-        const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
-          icon: taxaInfo.icon,
-          taxaCssClass: taxaInfo.cssClass
-        } as any).addTo(vectorLayer);
+      searchAreaBtn.classList.add('loading');
+
+      while (loaded < maxToLoad) {
+        if (btnSpan) btnSpan.textContent = `Loading ${loaded} / ${maxToLoad}...`;
+        if (progressBar) progressBar.style.width = `${(loaded / maxToLoad) * 100}%`;
+
+        const pageUrl = `${url}&limit=${limit}&offset=${loaded}`;
+        const res = await fetch(pageUrl);
+        const data = await res.json();
         
-        // Popup Initialization
-        const popup = L.popup({ maxWidth: 260, className: 'vector-popup' })
-          .setContent(`<div class="vector-popup-loading">${getIconSvg('loader-2')}</div>`);
-        marker.bindPopup(popup);
+        processOccurrences(data.results);
+        loaded += data.results.length;
 
-        marker.on('popupopen', async () => {
-          scheduleVectorPopupFit(map, marker);
-          
-          const taxonKey = occ.taxonKey || occ.speciesKey || occ.usageKey;
-          const cachedVernaculars = await resolveVernacularNames(taxonKey);
-          // Always work with a fresh copy to avoid mutating the worldwide cache
-          const localVernaculars = [...cachedVernaculars];
-          
-          const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
-          const datasetName = await resolveDatasetName(occ.datasetKey);
-          
-          const gbifImg = media ? gbifThumb(occ.key, media) : null;
-          let currentImg = gbifImg || (wiki ? wiki.imgUrl : null);
+        if (data.endOfRecords || data.results.length === 0) break;
+      }
 
-          // Merge labels from Wikidata with HIGHER priority than GBIF
-          if (wiki && wiki.labels) {
-            for (const [lc, name] of Object.entries(wiki.labels)) {
-              // Prepend Wikidata names to favor them over potentially mislabeled GBIF records
-              localVernaculars.unshift({ lang: lc, name });
-            }
-          }
-
-          // Identify all names matching the user's preference list in order
-          const preferredNames: { name: string, lang: string, isScientific: boolean }[] = [];
-          for (const lc of state.userLanguages) {
-            if (lc === 'la') {
-              preferredNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
-            } else {
-              const match = localVernaculars.find(v => v.lang === lc);
-              if (match) {
-                // If the "common" name is literally the scientific name, treat it as such
-                const isSci = match.name.toLowerCase() === occ.scientificName.toLowerCase();
-                preferredNames.push({ name: match.name, lang: lc, isScientific: isSci });
-              }
-            }
-          }
-
-
-          // The first preferred match is our primary title
-          const best = preferredNames[0] || { name: occ.scientificName, lang: 'la', isScientific: true };
-          
-          // All other preferred matches (plus scientific if not primary) form the subtitle list
-          const subtitleNames = preferredNames.filter(n => n !== best);
-          if (!best.isScientific && !subtitleNames.find(n => n.isScientific)) {
-            subtitleNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
-          }
-
-          const vnHtml = subtitleNames.map(n => 
-            `<div class="vernacular-popup" ${n.isScientific ? 'style="font-style: italic; opacity: 0.7;"' : ''}>
-              ${n.lang !== 'la' ? `<span class="lang-tag">${n.lang.toUpperCase()}</span> ` : ''}${n.name}
-            </div>`
-          ).join('');
-
-          const content = document.createElement('div');
-          content.className = 'vector-popup';
-          content.innerHTML = `
-            ${currentImg ? `<div class="popup-image-container">
-                <img src="${currentImg}" alt="${best.name}">
-                ${(gbifImg && wiki?.imgUrl) ? `<button class="switch-image-btn" title="Switch Image Source">${getIconSvg('refresh-cw')}</button>` : ''}
-                <div class="image-source-badge">${currentImg === gbifImg ? 'GBIF' : 'WIKI'}</div>
-              </div>` : ''}
-            <div class="title" ${best.isScientific ? 'style="font-style: italic;"' : ''}>${best.name}</div>
-            <div class="subtitle-group">${vnHtml}</div>
-            <div class="popup-details">
-              <div class="popup-detail">${getIconSvg('calendar')}<span>${occ.eventDate ? new Date(occ.eventDate).toLocaleDateString() : 'Unknown date'}</span></div>
-              <div class="popup-detail">${getIconSvg('database')}<span>${datasetName || 'GBIF.org'}</span></div>
-            </div>
-            <div class="popup-links">
-              <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank">${getIconSvg('external-link')} GBIF</a>
-              ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" class="wiki-link">${getIconSvg('book-open')} Wiki</a>` : ''}
-            </div>
-          `;
-
-
-
-
-
-          const switchBtn = content.querySelector('.switch-image-btn');
-          const badge = content.querySelector('.image-source-badge');
-          const img = content.querySelector('img') as HTMLImageElement;
-          
-          switchBtn?.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (currentImg === gbifImg) {
-              currentImg = wiki?.imgUrl || gbifImg;
-              if (badge) badge.textContent = 'WIKI';
-            } else {
-              currentImg = gbifImg;
-              if (badge) badge.textContent = 'GBIF';
-            }
-            if (img) img.src = currentImg!;
-          });
-
-          popup.setContent(content);
-          scheduleVectorPopupFit(map, marker);
-        });
-        
-        state.vectorMarkers.push({
-          cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker,
-          taxonomy: {
-            kingdom: occ.kingdom || '', phylum: occ.phylum || '', class: occ.class || '',
-            order: occ.order || '', family: occ.family || '', genus: occ.genus || '',
-            species: occ.species || occ.scientificName || '',
-            kingdomKey: occ.kingdomKey, phylumKey: occ.phylumKey, classKey: occ.classKey,
-            orderKey: occ.orderKey, familyKey: occ.familyKey, genusKey: occ.genusKey,
-            speciesKey: occ.speciesKey
-          }
-        });
-      });
+      if (btnSpan) btnSpan.textContent = 'Search this area';
+      if (progressBar) progressBar.style.width = '0%';
+      searchAreaBtn.classList.remove('loading');
 
       if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
       if (searchAreaBtn) searchAreaBtn.classList.add('hidden');
 
-      // Pre-warm vernacular name cache for all found species (fire-and-forget)
+      // Pre-warm vernacular name cache (fire-and-forget)
       const speciesKeys = [...new Set(
         state.vectorMarkers
           .map(m => m.taxonomy.speciesKey)
@@ -237,7 +296,9 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
 
       updateTaxonomyLegend();
     } catch (e) {
+      console.error(e);
       showErrorToast('Area search failed');
+      if (searchAreaBtn) searchAreaBtn.classList.remove('loading');
     }
   });
 
