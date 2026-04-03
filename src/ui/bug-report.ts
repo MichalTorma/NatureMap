@@ -117,7 +117,7 @@ function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<B
 function normalizeUserDescription(raw: string): string {
   const t = raw.trim();
   if (!t) {
-    return '_No description was entered in MyMap._\n\n_See screenshot and diagnostics below._';
+    return '_No description was entered in NatureMap._\n\n_See screenshot and diagnostics below._';
   }
   return t;
 }
@@ -150,7 +150,7 @@ function assembleIssueBody(
     '',
   ];
   if (imageDlUrl) {
-    parts.push(`![MyMap screenshot](${imageDlUrl})`);
+    parts.push(`![NatureMap screenshot](${imageDlUrl})`);
     parts.push('');
   } else {
     parts.push('_No auto-uploaded image — attach **Download PNG** from the bug dialog here if needed._');
@@ -247,7 +247,7 @@ export function initBugReport(map: L.Map, state: AppState, config: AppConfig): v
 
   let lastPngBlob: Blob | null = null;
   let lastReport: LastReportPayload | null = null;
-  let lastFilename = `mymap-bug.png`;
+  let lastFilename = `naturemap-bug.png`;
 
   const setStatus = (msg: string) => {
     if (statusEl) statusEl.textContent = msg;
@@ -322,7 +322,7 @@ export function initBugReport(map: L.Map, state: AppState, config: AppConfig): v
         );
       });
 
-      lastFilename = `mymap-bug-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      lastFilename = `naturemap-bug-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
 
       const dataUrl = canvas.toDataURL('image/png');
       if (imgPreview) imgPreview.src = dataUrl;
@@ -336,7 +336,7 @@ export function initBugReport(map: L.Map, state: AppState, config: AppConfig): v
         try {
           const scaled = downscaleCanvas(canvas, 1920);
           const jpeg = await canvasToJpegBlob(scaled, 0.82);
-          imageDlUrl = await uploadScreenshotToTmpfiles(jpeg, 'mymap-screenshot.jpg');
+          imageDlUrl = await uploadScreenshotToTmpfiles(jpeg, 'naturemap-screenshot.jpg');
         } catch (error) {
           console.error('Bug report: temporary image upload failed', {
             endpoint: TMPFILES_UPLOAD,

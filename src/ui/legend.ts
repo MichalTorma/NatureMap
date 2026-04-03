@@ -141,7 +141,7 @@ export function initLegend(state: AppState, hoverCard: HoverCardController) {
   legendClose?.addEventListener('click', closeLegend);
 
   // ── Resize ───────────────────────────────────────────────────────────────
-  const STORAGE_KEY_LEGEND_WIDTH = 'mymap_legend_width';
+  const STORAGE_KEY_LEGEND_WIDTH = 'naturemap_legend_width';
   let isResizing = false;
   if (vectorLegend && resizeHandle) {
     const savedWidth = localStorage.getItem(STORAGE_KEY_LEGEND_WIDTH);

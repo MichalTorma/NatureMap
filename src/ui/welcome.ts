@@ -7,7 +7,7 @@ import {
 } from '../state';
 
 export function initWelcome() {
-  const WELCOME_KEY = 'mymap_welcomed';
+  const WELCOME_KEY = 'naturemap_welcomed';
   const welcomeCard = document.getElementById('welcome-card');
   const welcomeDismiss = document.getElementById('welcome-dismiss');
   if (welcomeCard) {
