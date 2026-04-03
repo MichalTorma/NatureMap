@@ -91,6 +91,38 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
   }).addTo(map);
   state.vectorLayer = vectorLayer;
 
+  /** Avoid pathological GBIF values covering the planet */
+  const MAX_UNCERTAINTY_CIRCLE_M = 250_000;
+  let activeUncertaintyCircle: L.Circle | null = null;
+  let activeUncertaintyMarker: L.Marker | null = null;
+
+  const removeUncertaintyCircle = () => {
+    if (activeUncertaintyCircle) {
+      map.removeLayer(activeUncertaintyCircle);
+      activeUncertaintyCircle = null;
+    }
+    activeUncertaintyMarker = null;
+  };
+
+  const showUncertaintyCircleForMarker = (marker: L.Marker, meters: number | null) => {
+    removeUncertaintyCircle();
+    if (meters === null || !Number.isFinite(meters) || meters <= 0) return;
+
+    const radiusM = Math.min(Math.max(meters, 1), MAX_UNCERTAINTY_CIRCLE_M);
+    activeUncertaintyMarker = marker;
+    activeUncertaintyCircle = L.circle(marker.getLatLng(), {
+      radius: radiusM,
+      color: 'rgba(14, 165, 233, 0.92)',
+      weight: 2,
+      fillColor: '#0ea5e9',
+      fillOpacity: 0.1,
+      dashArray: '8 10',
+      interactive: false,
+      className: 'occurrence-uncertainty-circle',
+    }).addTo(map);
+    activeUncertaintyCircle.bringToBack();
+  };
+
   const hideLegendFab = () => {
     document.getElementById('legend-toggle')?.classList.add('hidden');
     document.getElementById('vector-legend')?.classList.remove('open');
@@ -151,7 +183,28 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
         .setContent(`<div class="vector-popup-loading">${getIconSvg('loader-2')}</div>`);
       marker.bindPopup(popup);
 
+      let precisionRingHover = false;
+      marker.on('mouseover', () => {
+        precisionRingHover = true;
+        showUncertaintyCircleForMarker(marker, uncertaintyM);
+      });
+      marker.on('mouseout', () => {
+        precisionRingHover = false;
+        if (!marker.isPopupOpen()) removeUncertaintyCircle();
+      });
+      marker.on('popupclose', () => {
+        if (precisionRingHover) showUncertaintyCircleForMarker(marker, uncertaintyM);
+        else removeUncertaintyCircle();
+      });
+
+      marker.on('move', () => {
+        if (activeUncertaintyCircle && activeUncertaintyMarker === marker) {
+          activeUncertaintyCircle.setLatLng(marker.getLatLng());
+        }
+      });
+
       marker.on('popupopen', async () => {
+        showUncertaintyCircleForMarker(marker, uncertaintyM);
         scheduleVectorPopupFit(map, marker);
         const taxonKey = occ.taxonKey || occ.speciesKey || occ.usageKey;
         const cachedVernaculars = await resolveVernacularNames(taxonKey);
@@ -316,6 +369,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       const maxToLoad = Math.min(totalCount, 10000);
       let loaded = 0;
 
+      removeUncertaintyCircle();
       vectorLayer.clearLayers();
       state.vectorMarkers = [];
       hideLegendFab();
@@ -386,6 +440,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
   });
 
   clearPointsBtn?.addEventListener('click', () => {
+    removeUncertaintyCircle();
     vectorLayer.clearLayers();
     state.vectorMarkers = [];
     hideLegendFab();
