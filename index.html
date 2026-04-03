@@ -27,9 +27,30 @@
     <div id="map"></div>
 
     <div class="bug-report-ui bug-report-fab-wrap">
-      <button type="button" id="bug-report-fab" class="bug-report-fab" title="Report a bug" aria-label="Report a bug">
-        <i data-lucide="bug"></i>
-      </button>
+      <div class="bug-report-fab-cluster">
+        <button
+          type="button"
+          id="external-status-btn"
+          class="external-status-bubble"
+          aria-label="External services status"
+          aria-expanded="false"
+          aria-controls="external-status-popover"
+          hidden
+        >
+          <span id="external-status-dot" class="external-status-dot unknown" aria-hidden="true"></span>
+        </button>
+        <button type="button" id="bug-report-fab" class="bug-report-fab" title="Report a bug" aria-label="Report a bug">
+          <i data-lucide="bug"></i>
+        </button>
+      </div>
+      <div id="external-status-popover" class="external-status-popover" role="region" aria-label="External service checks">
+        <div class="external-status-popover-header">
+          <h3 class="external-status-title">External services</h3>
+          <button type="button" id="external-status-refresh" class="external-status-refresh">Refresh</button>
+        </div>
+        <p id="external-status-summary" class="external-status-summary"></p>
+        <div id="external-status-list" class="external-status-list"></div>
+      </div>
     </div>
 
     <div id="bug-report-modal" class="bug-report-modal hidden" role="dialog" aria-modal="true" aria-labelledby="bug-report-title" aria-hidden="true">
@@ -64,6 +85,7 @@
         <i data-lucide="search"></i>
         <span>Search this area</span>
       </button>
+      <p class="vector-precision-hint">Pins show location blur: <strong>25m</strong>, <strong>4km</strong>, or <strong>?</strong> if unknown — hover a pin for a full sentence.</p>
     </div>
 
     <!-- Dynamic Vector Taxonomy Legend -->
@@ -90,9 +112,19 @@
       <div id="vector-legend-body" class="legend-body"></div>
     </div>
 
-    <!-- Base Layer Popover -->
-    <div id="base-layer-popover" class="base-layer-popover">
-      <div id="base-layer-grid" class="base-layer-grid"></div>
+    <!-- Base map panel (styled like biodiversity panel) -->
+    <div id="base-layer-popover" class="base-layer-popover floating-map-panel">
+      <div class="panel-header">
+        <h1>BASE MAP</h1>
+        <div class="panel-header-actions">
+          <button type="button" id="base-layer-panel-close" class="panel-close-btn" aria-label="Close base map panel">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="base-layer-popover-body">
+        <div id="base-layer-grid" class="base-layer-grid"></div>
+      </div>
     </div>
     
     <!-- Layer FAB Stack -->
@@ -107,20 +139,6 @@
       <button id="locate-btn" class="layer-fab" aria-label="Find My Location" title="Find My Location">
         <i data-lucide="locate"></i>
       </button>
-      <div class="external-status-wrap">
-        <button type="button" id="external-status-btn" class="layer-fab external-status-fab" aria-label="External services status" aria-expanded="false" aria-controls="external-status-popover">
-          <span id="external-status-dot" class="external-status-dot unknown" aria-hidden="true"></span>
-          <span id="external-status-label" class="external-status-label">Services</span>
-        </button>
-        <div id="external-status-popover" class="external-status-popover" role="region" aria-label="External service checks">
-          <div class="external-status-popover-header">
-            <h3 class="external-status-title">External services</h3>
-            <button type="button" id="external-status-refresh" class="external-status-refresh">Refresh</button>
-          </div>
-          <p id="external-status-summary" class="external-status-summary"></p>
-          <div id="external-status-list" class="external-status-list"></div>
-        </div>
-      </div>
       <div class="menu-container">
         <div class="layer-stack-items">
           <!-- GBIF Quick Control Row -->
@@ -151,7 +169,7 @@
             </button>
           </div>
 
-          <div class="layer-separator"></div>
+          <div class="layer-separator layer-stack-item" aria-hidden="true"></div>
 
           <!-- Language Settings Row -->
           <div class="layer-row-item layer-stack-item">
@@ -163,14 +181,14 @@
             </button>
           </div>
         </div>
-        <button id="menu-fab" class="layer-fab menu-fab" aria-label="Layers" title="Layers">
-          <i data-lucide="layers" class="menu-icon"></i>
+        <button id="menu-fab" class="layer-fab menu-fab" aria-label="Settings" title="Settings">
+          <i data-lucide="settings" class="menu-icon"></i>
         </button>
       </div>
     </div>
 
     <!-- GBIF Settings Panel -->
-    <div id="gbif-panel" class="gbif-settings-panel">
+    <div id="gbif-panel" class="gbif-settings-panel floating-map-panel">
       <div class="drag-handle"></div>
       <div class="panel-header">
         <h1>BIODIVERSITY</h1>
@@ -340,7 +358,7 @@
     </div>
 
     <!-- Language Settings Panel -->
-    <div id="lang-panel" class="gbif-settings-panel">
+    <div id="lang-panel" class="gbif-settings-panel floating-map-panel">
       <div class="drag-handle"></div>
       <div class="panel-header">
         <h1>LANGUAGES</h1>

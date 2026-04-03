@@ -2,11 +2,12 @@ import L from 'leaflet';
 import { AppState, STORAGE_KEY_BASE, STORAGE_KEY_OVERLAYS } from '../state';
 import { getIconSvg } from './icons';
 
-export function initFabs(map: L.Map, state: AppState, _closeGbifPanel: () => void) {
+export function initFabs(map: L.Map, state: AppState, closeGbifPanel: () => void) {
   const { config, activeOverlayIds } = state;
   const baseLayerPopover = document.getElementById('base-layer-popover');
   const baseLayerGrid = document.getElementById('base-layer-grid');
   const baseLayerFab = document.getElementById('base-layer-fab');
+  const baseLayerPanelClose = document.getElementById('base-layer-panel-close');
   const overlayFabContainer = document.getElementById('overlay-fabs');
   const layerStack = document.getElementById('layer-stack');
   const menuFab = document.getElementById('menu-fab');
@@ -26,6 +27,7 @@ export function initFabs(map: L.Map, state: AppState, _closeGbifPanel: () => voi
   };
 
   const openBasePopover = () => {
+    closeGbifPanel();
     baseLayerPopover?.classList.add('open');
   };
 
@@ -66,6 +68,19 @@ export function initFabs(map: L.Map, state: AppState, _closeGbifPanel: () => voi
     e.stopPropagation();
     if (baseLayerPopover?.classList.contains('open')) closeBasePopover();
     else openBasePopover();
+  });
+
+  baseLayerPanelClose?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeBasePopover();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!baseLayerPopover?.classList.contains('open')) return;
+    const t = e.target as Node;
+    if (baseLayerPopover.contains(t)) return;
+    if (baseLayerFab?.contains(t)) return;
+    closeBasePopover();
   });
 
   config.overlays.forEach((spec, idx) => {
@@ -141,6 +156,23 @@ export function initFabs(map: L.Map, state: AppState, _closeGbifPanel: () => voi
   };
 
   menuFab?.addEventListener('click', () => layerStack?.classList.toggle('open'));
+
+  document.addEventListener('click', (e) => {
+    if (!layerStack?.classList.contains('open')) return;
+    const t = e.target as Node;
+    if (layerStack.contains(t)) return;
+    const overlay = document.getElementById('panel-overlay');
+    if (overlay?.classList.contains('active') && (t === overlay || overlay.contains(t))) return;
+    const gbifPanel = document.getElementById('gbif-panel');
+    if (gbifPanel?.classList.contains('open') && (t === gbifPanel || gbifPanel.contains(t))) return;
+    const langPanel = document.getElementById('lang-panel');
+    if (langPanel?.classList.contains('open') && (t === langPanel || langPanel.contains(t))) return;
+    const basePopover = document.getElementById('base-layer-popover');
+    if (basePopover?.classList.contains('open') && (t === basePopover || basePopover.contains(t))) return;
+    const vectorLegend = document.getElementById('vector-legend');
+    if (vectorLegend?.classList.contains('open') && (t === vectorLegend || vectorLegend.contains(t))) return;
+    closeLayerStack();
+  });
   
   return { closeLayerStack };
 }

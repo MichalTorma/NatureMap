@@ -5,6 +5,10 @@
   --accent-color: #3b82f6;
   --panel-bg: rgba(15, 23, 42, 0.7);
   --panel-border: rgba(255, 255, 255, 0.12);
+  /* FAB stack and “floating” map panels (base map, biodiversity) */
+  --z-map-fab-stack: 2500;
+  --z-floating-panel-backdrop: 2790;
+  --z-floating-panel: 2800;
 }
 
 * {

@@ -43,9 +43,18 @@ async function initMap() {
 
     initFabs(map, state, closeGbifPanel);
     initGeo(map);
-    initLanguages(state, () => {
+    const { closeLangPanel } = initLanguages(state, () => {
       // Re-render legend with new language preferences
       void onLanguagesChanged();
+    });
+
+    const panelOverlay = document.getElementById('panel-overlay');
+    panelOverlay?.addEventListener('click', () => {
+      if (document.getElementById('gbif-panel')?.classList.contains('open')) {
+        closeGbifPanel();
+      } else if (document.getElementById('lang-panel')?.classList.contains('open')) {
+        closeLangPanel();
+      }
     });
     initWelcome();
     initVectorSearch(map, state, updateTaxonomyLegend);

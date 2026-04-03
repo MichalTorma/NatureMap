@@ -6,6 +6,12 @@
   z-index: 2500;
 }
 
+.bug-report-fab-cluster {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+}
+
 .bug-report-fab {
   width: 48px;
   height: 48px;

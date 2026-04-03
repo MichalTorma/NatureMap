@@ -12,6 +12,13 @@ import { getIconSvg } from '../ui/icons';
 import { showErrorToast } from '../ui/toasts';
 import { shareOrCopyUrl } from '../ui/share';
 import { describeFetchFailure, getLastHealthSnapshot } from '../health/external-status';
+import {
+  coordinateUncertaintyMetersFromOcc,
+  humanUncertaintyPopupHtml,
+  precisionTierFromUncertaintyMeters,
+  shortUncertaintyBadgeText,
+  uncertaintyBadgeTitle,
+} from './occurrence-precision';
 
 export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLegend: () => void) {
   const searchAreaBtn = document.getElementById('search-area-btn');
@@ -28,9 +35,12 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
   const createClusterIcon = (cluster: any) => {
     const children = cluster.getAllChildMarkers();
     const counts: Record<string, number> = {};
+    let allTight = true;
     children.forEach((m: any) => {
       const cls = (m.options as any).taxaCssClass || 'default';
       counts[cls] = (counts[cls] || 0) + 1;
+      const tier = (m.options as any).occurrencePrecisionTier;
+      if (tier !== 'tight') allTight = false;
     });
     const total = children.length;
     const size = total < 20 ? 44 : total < 100 ? 52 : 60;
@@ -58,9 +68,13 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       angle += sliceAngle;
     }
 
+    const mixHint = allTight
+      ? ''
+      : `<text x="${r}" y="${size - 5}" text-anchor="middle" fill="rgba(248,250,252,0.65)" font-size="11" font-weight="800" font-style="italic">~</text>`;
     const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
       ${segments}<circle cx="${r}" cy="${r}" r="${inner}" fill="rgba(15,23,42,0.85)"/>
       <text x="${r}" y="${r}" text-anchor="middle" dy=".35em" fill="#fff" font-size="${size < 50 ? 12 : 14}" font-weight="700">${total}</text>
+      ${mixHint}
     </svg>`;
 
     return L.divIcon({
@@ -118,10 +132,19 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       if (!occ.decimalLatitude || !occ.decimalLongitude) return;
       const media = occ.media?.find((m: any) => m.type === 'StillImage')?.identifier || '';
       const hasImage = !!media;
-      const taxaInfo = getTaxaInfo(occ.class || occ.kingdom, hasImage);
+      const uncertaintyM = coordinateUncertaintyMetersFromOcc(occ);
+      const occurrencePrecisionTier = precisionTierFromUncertaintyMeters(uncertaintyM);
+      const precisionBadge = {
+        text: shortUncertaintyBadgeText(uncertaintyM),
+        title: uncertaintyBadgeTitle(uncertaintyM),
+        tier: occurrencePrecisionTier,
+      };
+      const taxaInfo = getTaxaInfo(occ.class || occ.kingdom, hasImage, precisionBadge);
       const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
         icon: taxaInfo.icon,
-        taxaCssClass: taxaInfo.cssClass
+        taxaCssClass: taxaInfo.cssClass,
+        occurrencePrecisionTier,
+        occurrenceUncertaintyM: uncertaintyM,
       } as any).addTo(vectorLayer);
       
       const popup = L.popup({ maxWidth: 260, className: 'vector-popup' })
@@ -181,6 +204,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
           <div class="subtitle-group">${vnHtml}</div>
           <div class="popup-details">
             <div class="popup-detail">${getIconSvg('calendar')}<span>${occ.eventDate ? new Date(occ.eventDate).toLocaleDateString() : 'Unknown date'}</span></div>
+            <div class="popup-detail popup-detail-precision">${getIconSvg('map-pin')}<span>${humanUncertaintyPopupHtml(uncertaintyM)}</span></div>
             <div class="popup-detail">${getIconSvg('database')}<span>${datasetName || 'GBIF.org'}</span></div>
           </div>
           <div class="popup-links">

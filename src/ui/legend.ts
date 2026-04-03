@@ -129,7 +129,10 @@ export function initLegend(state: AppState, hoverCard: HoverCardController) {
   const closeLegend = () => {
     vectorLegend?.classList.remove('open');
     legendToggle?.classList.remove('active');
-    if (!document.getElementById('gbif-panel')?.classList.contains('open')) {
+    if (
+      !document.getElementById('gbif-panel')?.classList.contains('open') &&
+      !document.getElementById('lang-panel')?.classList.contains('open')
+    ) {
       document.body.classList.remove('panel-active');
     }
   };
@@ -139,6 +142,14 @@ export function initLegend(state: AppState, hoverCard: HoverCardController) {
     else openLegend();
   });
   legendClose?.addEventListener('click', closeLegend);
+
+  document.addEventListener('click', (e) => {
+    if (!vectorLegend?.classList.contains('open')) return;
+    const t = e.target as Node;
+    if (vectorLegend.contains(t)) return;
+    if (legendToggle?.contains(t)) return;
+    closeLegend();
+  });
 
   // ── Resize ───────────────────────────────────────────────────────────────
   const STORAGE_KEY_LEGEND_WIDTH = 'naturemap_legend_width';

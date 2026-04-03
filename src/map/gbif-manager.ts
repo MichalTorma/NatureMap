@@ -77,7 +77,7 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
       recordGbifMapTileError();
       if (shouldShowGbifTileFailureToast()) {
         showErrorToast(
-          'Biodiversity map tiles failed to load. GBIF may be unavailable — open Services for details or see https://www.gbif.org/system-health',
+          'Biodiversity map tiles failed to load. GBIF may be unavailable — if the red/yellow dot appears on the bug button, tap it for details, or see https://www.gbif.org/system-health',
         );
       }
     });
