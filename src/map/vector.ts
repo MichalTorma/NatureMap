@@ -10,6 +10,7 @@ import {
 import { scheduleVectorPopupFit } from './core';
 import { getIconSvg } from '../ui/icons';
 import { showErrorToast } from '../ui/toasts';
+import { shareOrCopyUrl } from '../ui/share';
 import { describeFetchFailure, getLastHealthSnapshot } from '../health/external-status';
 
 export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLegend: () => void) {
@@ -183,8 +184,9 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
             <div class="popup-detail">${getIconSvg('database')}<span>${datasetName || 'GBIF.org'}</span></div>
           </div>
           <div class="popup-links">
-            <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank">${getIconSvg('external-link')} GBIF</a>
-            ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" class="wiki-link">${getIconSvg('book-open')} Wiki</a>` : ''}
+            <button type="button" class="popup-share-btn" title="Share or copy link" aria-label="Share this observation">${getIconSvg('share-2')} Share</button>
+            <a href="https://www.gbif.org/occurrence/${occ.key}" target="_blank" rel="noopener noreferrer">${getIconSvg('external-link')} GBIF</a>
+            ${wiki ? `<a href="${wiki.wikiUrl}" target="_blank" rel="noopener noreferrer" class="wiki-link">${getIconSvg('book-open')} Wiki</a>` : ''}
           </div>
         `;
 
@@ -203,6 +205,17 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
             if (badge) badge.textContent = 'GBIF';
           }
           if (img) img.src = currentImg!;
+        });
+
+        const gbifOccUrl = `https://www.gbif.org/occurrence/${occ.key}`;
+        content.querySelector('.popup-share-btn')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void shareOrCopyUrl({
+            title: best.name,
+            text: `GBIF observation: ${occ.scientificName}`,
+            url: gbifOccUrl
+          });
         });
 
         popup.setContent(content);

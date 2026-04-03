@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import { getIconSvg } from '../ui/icons';
+import { getTaxonMarkerIconSvg } from '../ui/taxon-marker-icons';
 
 export const getTaxaInfo = (className: string, hasImage = false) => {
   let iconName = 'leaf', cssClass = 'default', label = 'Unknown';
@@ -8,11 +9,11 @@ export const getTaxaInfo = (className: string, hasImage = false) => {
   else if (c === 'mammalia') { iconName = 'paw-print'; cssClass = 'mammalia'; label = 'Mammals'; }
   else if (['plantae', 'magnoliopsida', 'liliopsida', 'polypodiopsida', 'pinopsida'].includes(c)) { iconName = 'leaf'; cssClass = 'plantae'; label = 'Plants'; }
   else if (c === 'insecta') { iconName = 'bug'; cssClass = 'insecta'; label = 'Insects'; }
-  else if (['fungi', 'agaricomycetes', 'lecanoromycetes', 'sordariomycetes'].includes(c)) { iconName = 'sprout'; cssClass = 'fungi'; label = 'Fungi'; }
+  else if (['fungi', 'agaricomycetes', 'lecanoromycetes', 'sordariomycetes'].includes(c)) { iconName = 'mushroom'; cssClass = 'fungi'; label = 'Fungi'; }
   else if (c === 'reptilia') { iconName = 'turtle'; cssClass = 'reptilia'; label = 'Reptiles'; }
   else if (c === 'amphibia') { iconName = 'egg'; cssClass = 'amphibia'; label = 'Amphibians'; }
   else if (['actinopterygii', 'chondrichthyes'].includes(c)) { iconName = 'fish'; cssClass = 'actinopterygii'; label = 'Fish'; }
-  else if (c === 'arachnida') { iconName = 'waypoints'; cssClass = 'arachnida'; label = 'Arachnids'; }
+  else if (c === 'arachnida') { iconName = 'spider'; cssClass = 'arachnida'; label = 'Arachnids'; }
   else if (c === 'gastropoda') { iconName = 'snail'; cssClass = 'gastropoda'; label = 'Snails'; }
   else if (c === 'malacostraca') { iconName = 'shrimp'; cssClass = 'malacostraca'; label = 'Crustaceans'; }
   else if (['bivalvia', 'cephalopoda', 'polyplacophora'].includes(c)) { iconName = 'shell'; cssClass = 'mollusca'; label = 'Molluscs'; }
@@ -21,7 +22,7 @@ export const getTaxaInfo = (className: string, hasImage = false) => {
   return {
     icon: L.divIcon({
       className: 'custom-taxa-icon',
-      html: `<div class="taxa-marker ${cssClass}">${getIconSvg(iconName)}${photoBadge}</div>`,
+      html: `<div class="taxa-marker ${cssClass}">${getTaxonMarkerIconSvg(iconName)}${photoBadge}</div>`,
       iconSize: [38, 38], iconAnchor: [19, 19], popupAnchor: [0, -19]
     }), cssClass, label, iconName
   };
