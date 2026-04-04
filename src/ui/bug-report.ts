@@ -2,6 +2,7 @@ import html2canvas from 'html2canvas';
 import type L from 'leaflet';
 import { AppState } from '../state';
 import type { AppConfig } from '../types';
+import { vnCache, wikidataCache } from '../map/gbif';
 import { initIcons } from './icons';
 import { showErrorToast } from './toasts';
 
@@ -33,11 +34,18 @@ function buildSnapshot(_map: L.Map, state: AppState) {
       }
     }
   });
-  const loadedSpecies = Array.from(speciesMap.entries()).map(([key, info]) => ({
-    key,
-    name: info.name,
-    count: info.count
-  }));
+  const loadedSpecies = Array.from(speciesMap.entries()).map(([key, info]) => {
+    const translations = {
+      gbif: vnCache.get(key) || [],
+      wikidata: wikidataCache.get(key)?.labels || {}
+    };
+    return {
+      key,
+      name: info.name,
+      count: info.count,
+      translations
+    };
+  });
 
   return {
     capturedAt: new Date().toISOString(),
