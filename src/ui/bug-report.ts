@@ -17,9 +17,7 @@ type LastReportPayload = {
   snapshot: Snapshot;
 };
 
-function buildSnapshot(map: L.Map, state: AppState) {
-  const center = map.getCenter();
-  const bounds = map.getBounds();
+function buildSnapshot(_map: L.Map, state: AppState) {
   return {
     capturedAt: new Date().toISOString(),
     url: window.location.href,
@@ -30,13 +28,13 @@ function buildSnapshot(map: L.Map, state: AppState) {
     },
     userAgent: navigator.userAgent,
     map: {
-      center: [center.lat, center.lng],
-      zoom: map.getZoom(),
+      center: ['<redacted>', '<redacted>'],
+      zoom: _map.getZoom(),
       bounds: {
-        south: bounds.getSouth(),
-        west: bounds.getWest(),
-        north: bounds.getNorth(),
-        east: bounds.getEast(),
+        south: '<redacted>',
+        west: '<redacted>',
+        north: '<redacted>',
+        east: '<redacted>',
       },
     },
     app: {
@@ -292,8 +290,14 @@ export function initBugReport(map: L.Map, state: AppState, config: AppConfig): v
     btnGithub?.classList.add('bug-report-github-disabled');
 
     try {
+      if (state.userLocationMarker && map.getBounds().contains(state.userLocationMarker.getLatLng())) {
+        showErrorToast('Privacy alert: Your location is visible on the map. Please pan away to report a bug.');
+        fab.disabled = false;
+        return;
+      }
+
       state.syncStateToURL(map);
-      const shareUrl = window.location.href;
+      const shareUrl = state.getRedactedURL();
       const snapshot = buildSnapshot(map, state);
 
       const canvas = await html2canvas(document.body, {

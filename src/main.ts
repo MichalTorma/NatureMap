@@ -42,7 +42,7 @@ async function initMap() {
     const { closeGbifPanel } = initGbifPanel(map, state, updateGbifLayer);
 
     initFabs(map, state, closeGbifPanel);
-    initGeo(map);
+    initGeo(map, state);
     const { closeLangPanel } = initLanguages(state, () => {
       // Re-render legend with new language preferences
       void onLanguagesChanged();
