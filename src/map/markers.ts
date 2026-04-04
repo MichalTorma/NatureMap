@@ -7,7 +7,7 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
-export type PrecisionBadge = { text: string; title: string; tier: PrecisionTier };
+export type PrecisionBadge = { text: string; title: string; tier: PrecisionTier; estimated?: boolean };
 
 export const getTaxaInfo = (className: string, hasImage = false, precisionBadge: PrecisionBadge | null = null) => {
   let iconName = 'leaf', cssClass = 'default', label = 'Unknown';
@@ -27,7 +27,7 @@ export const getTaxaInfo = (className: string, hasImage = false, precisionBadge:
   else { label = className ? className.charAt(0).toUpperCase() + className.slice(1) : 'Unknown'; }
   const photoBadge = hasImage ? `<span class="marker-photo-badge">${getIconSvg('camera')}</span>` : '';
   const precHtml = precisionBadge
-    ? `<span class="precision-badge precision-badge--${precisionBadge.tier}" title="${escapeAttr(precisionBadge.title)}">${precisionBadge.text}</span>`
+    ? `<span class="precision-badge precision-badge--${precisionBadge.tier}${precisionBadge.estimated ? ' precision-badge--estimated' : ''}" title="${escapeAttr(precisionBadge.title)}">${precisionBadge.text}</span>`
     : '';
   return {
     icon: L.divIcon({

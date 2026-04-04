@@ -13,11 +13,12 @@ import { showErrorToast } from '../ui/toasts';
 import { shareOrCopyUrl } from '../ui/share';
 import { describeFetchFailure, getLastHealthSnapshot } from '../health/external-status';
 import {
-  coordinateUncertaintyMetersFromOcc,
   humanUncertaintyPopupHtml,
-  precisionTierFromUncertaintyMeters,
+  MAX_UNCERTAINTY_DISPLAY_M,
+  resolveLocationUncertainty,
   shortUncertaintyBadgeText,
   uncertaintyBadgeTitle,
+  precisionTierFromResolved,
 } from './occurrence-precision';
 
 export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLegend: () => void) {
@@ -91,8 +92,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
   }).addTo(map);
   state.vectorLayer = vectorLayer;
 
-  /** Avoid pathological GBIF values covering the planet */
-  const MAX_UNCERTAINTY_CIRCLE_M = 250_000;
+  const MAX_UNCERTAINTY_CIRCLE_M = MAX_UNCERTAINTY_DISPLAY_M;
   let activeUncertaintyCircle: L.Circle | null = null;
   let activeUncertaintyMarker: L.Marker | null = null;
 
@@ -164,19 +164,20 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       if (!occ.decimalLatitude || !occ.decimalLongitude) return;
       const media = occ.media?.find((m: any) => m.type === 'StillImage')?.identifier || '';
       const hasImage = !!media;
-      const uncertaintyM = coordinateUncertaintyMetersFromOcc(occ);
-      const occurrencePrecisionTier = precisionTierFromUncertaintyMeters(uncertaintyM);
+      const uncertaintyRes = resolveLocationUncertainty(occ);
+      const occurrencePrecisionTier = precisionTierFromResolved(uncertaintyRes);
       const precisionBadge = {
-        text: shortUncertaintyBadgeText(uncertaintyM),
-        title: uncertaintyBadgeTitle(uncertaintyM),
+        text: shortUncertaintyBadgeText(uncertaintyRes),
+        title: uncertaintyBadgeTitle(uncertaintyRes),
         tier: occurrencePrecisionTier,
+        estimated: uncertaintyRes.isEstimate,
       };
       const taxaInfo = getTaxaInfo(occ.class || occ.kingdom, hasImage, precisionBadge);
       const marker = L.marker([occ.decimalLatitude, occ.decimalLongitude], {
         icon: taxaInfo.icon,
         taxaCssClass: taxaInfo.cssClass,
         occurrencePrecisionTier,
-        occurrenceUncertaintyM: uncertaintyM,
+        occurrenceUncertaintyResolved: uncertaintyRes,
       } as any).addTo(vectorLayer);
       
       const popup = L.popup({ maxWidth: 260, className: 'vector-popup' })
@@ -186,14 +187,14 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       let precisionRingHover = false;
       marker.on('mouseover', () => {
         precisionRingHover = true;
-        showUncertaintyCircleForMarker(marker, uncertaintyM);
+        showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
       });
       marker.on('mouseout', () => {
         precisionRingHover = false;
         if (!marker.isPopupOpen()) removeUncertaintyCircle();
       });
       marker.on('popupclose', () => {
-        if (precisionRingHover) showUncertaintyCircleForMarker(marker, uncertaintyM);
+        if (precisionRingHover) showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
         else removeUncertaintyCircle();
       });
 
@@ -204,7 +205,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       });
 
       marker.on('popupopen', async () => {
-        showUncertaintyCircleForMarker(marker, uncertaintyM);
+        showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
         scheduleVectorPopupFit(map, marker);
         const taxonKey = occ.taxonKey || occ.speciesKey || occ.usageKey;
         const cachedVernaculars = await resolveVernacularNames(taxonKey);
@@ -257,7 +258,7 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
           <div class="subtitle-group">${vnHtml}</div>
           <div class="popup-details">
             <div class="popup-detail">${getIconSvg('calendar')}<span>${occ.eventDate ? new Date(occ.eventDate).toLocaleDateString() : 'Unknown date'}</span></div>
-            <div class="popup-detail popup-detail-precision">${getIconSvg('map-pin')}<span>${humanUncertaintyPopupHtml(uncertaintyM)}</span></div>
+            <div class="popup-detail popup-detail-precision">${getIconSvg('map-pin')}<span>${humanUncertaintyPopupHtml(uncertaintyRes)}</span></div>
             <div class="popup-detail">${getIconSvg('database')}<span>${datasetName || 'GBIF.org'}</span></div>
           </div>
           <div class="popup-links">

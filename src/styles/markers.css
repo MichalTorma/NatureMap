@@ -193,6 +193,11 @@
   border-color: rgba(148, 163, 184, 0.6);
 }
 
+.precision-badge--estimated {
+  border-style: dashed;
+  border-width: 1.5px;
+}
+
 .taxa-marker.aves { background: #3b82f6; }
 .taxa-marker.mammalia { background: #f97316; }
 .taxa-marker.plantae { background: #22c55e; }
@@ -330,6 +335,19 @@
   line-height: 1.4;
 }
 .vector-popup .popup-detail-precision span strong { color: #e2e8f0; }
+.vector-popup .popup-precision-estimated {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  margin-right: 4px;
+}
+.vector-popup .popup-detail-precision sup {
+  font-size: 0.65em;
+  vertical-align: super;
+}
 .vector-popup .popup-detail a { color: #60a5fa; text-decoration: none; }
 .vector-popup .popup-detail a:hover { text-decoration: underline; }
 .vector-popup .popup-links {
