@@ -80,10 +80,11 @@
     
     <!-- Vector Search Overlay (Appears Zoom >= 12) -->
     <div id="vector-search-controls" class="vector-controls hidden">
-      <button id="search-area-btn" class="search-area-btn">
-        <div class="search-progress-bar"></div>
-        <i data-lucide="search"></i>
-        <span>Search this area</span>
+      <button type="button" id="search-area-btn" class="search-area-btn" aria-live="polite">
+        <div class="search-progress-fill" aria-hidden="true"></div>
+        <div class="search-progress-bar" aria-hidden="true"></div>
+        <i data-lucide="search" class="search-area-btn-icon" aria-hidden="true"></i>
+        <span class="search-area-btn-label">Search this area</span>
       </button>
     </div>
 

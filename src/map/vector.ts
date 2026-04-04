@@ -1,11 +1,13 @@
 import L from 'leaflet';
 import { AppState } from '../state';
 import { getTaxaInfo } from './markers';
-import { 
-  gbifThumb, 
-  resolveWikidataInfo, 
-  resolveVernacularNames, 
-  resolveDatasetName
+import {
+  gbifThumb,
+  resolveWikidataInfo,
+  resolveVernacularNames,
+  resolveDatasetName,
+  type VnName,
+  type WikiInfo,
 } from './gbif';
 import { scheduleVectorPopupFit } from './core';
 import { getIconSvg } from '../ui/icons';
@@ -21,15 +23,168 @@ import {
   precisionTierFromResolved,
 } from './occurrence-precision';
 
+interface PreferredNameRow {
+  name: string;
+  lang: string;
+  isScientific: boolean;
+}
+
+function getOccTaxonKey(occ: { taxonKey?: number; speciesKey?: number; usageKey?: number }): number {
+  return occ.taxonKey || occ.speciesKey || occ.usageKey || 0;
+}
+
+function mergeWikiIntoVernaculars(cached: VnName[], wiki: WikiInfo | null): VnName[] {
+  const local = [...cached];
+  if (wiki?.labels) {
+    for (const [lc, name] of Object.entries(wiki.labels)) {
+      local.unshift({ lang: lc, name });
+    }
+  }
+  return local;
+}
+
+function buildPreferredNameRows(
+  occ: { scientificName?: string },
+  userLanguages: string[],
+  localVernaculars: VnName[],
+): PreferredNameRow[] {
+  const scientificName = occ.scientificName || 'Unknown';
+  const preferredNames: PreferredNameRow[] = [];
+  for (const lc of userLanguages) {
+    if (lc === 'la') {
+      preferredNames.push({ name: scientificName, lang: 'la', isScientific: true });
+    } else {
+      const match = localVernaculars.find(v => v.lang === lc);
+      if (match) {
+        const isSci = match.name.toLowerCase() === scientificName.toLowerCase();
+        preferredNames.push({ name: match.name, lang: lc, isScientific: isSci });
+      }
+    }
+  }
+  return preferredNames;
+}
+
+function bestAndSubtitles(
+  preferredNames: PreferredNameRow[],
+  scientificName: string,
+): { best: PreferredNameRow; subtitles: PreferredNameRow[] } {
+  const best = preferredNames[0] || { name: scientificName, lang: 'la', isScientific: true };
+  const subtitleNames = preferredNames.filter(n => n !== best);
+  if (!best.isScientific && !subtitleNames.find(n => n.isScientific)) {
+    subtitleNames.push({ name: scientificName, lang: 'la', isScientific: true });
+  }
+  return { best, subtitles: subtitleNames };
+}
+
+/** Hover tooltip: primary + one row per other language in settings (same rules as popup). */
+function buildOccurrenceHoverTooltipEl(best: PreferredNameRow, subtitles: PreferredNameRow[]): HTMLElement {
+  const root = document.createElement('div');
+  root.className = 'occurrence-hover-tooltip';
+
+  const title = document.createElement('div');
+  title.className = 'occ-hover-title';
+  title.textContent = best.name;
+  if (best.isScientific) title.style.fontStyle = 'italic';
+  root.appendChild(title);
+
+  for (const n of subtitles) {
+    const row = document.createElement('div');
+    row.className = n.isScientific ? 'occ-hover-sub occ-hover-sub--sci' : 'occ-hover-sub';
+    const tag = document.createElement('span');
+    tag.className = 'occ-hover-lang';
+    tag.textContent = n.lang === 'la' ? 'LA' : n.lang.toUpperCase();
+    row.appendChild(tag);
+    row.appendChild(document.createTextNode(' '));
+    const nm = document.createElement('span');
+    nm.className = 'occ-hover-name';
+    nm.textContent = n.name;
+    row.appendChild(nm);
+    root.appendChild(row);
+  }
+
+  return root;
+}
+
 export function initVectorSearch(
   map: L.Map,
   state: AppState,
   updateTaxonomyLegend: () => void,
   updateGbifLayer: () => void,
 ) {
-  const searchAreaBtn = document.getElementById('search-area-btn');
+  const searchAreaBtn = document.getElementById('search-area-btn') as HTMLButtonElement | null;
   const clearPointsBtn = document.getElementById('clear-points-btn');
   const vectorControls = document.getElementById('vector-search-controls');
+
+  const searchBtnLabel = () => searchAreaBtn?.querySelector<HTMLElement>('.search-area-btn-label');
+  const searchBtnBar = () => searchAreaBtn?.querySelector<HTMLElement>('.search-progress-bar');
+  const searchBtnFill = () => searchAreaBtn?.querySelector<HTMLElement>('.search-progress-fill');
+
+  const resetSearchAreaButtonUi = () => {
+    if (!searchAreaBtn) return;
+    searchAreaBtn.disabled = false;
+    searchAreaBtn.removeAttribute('aria-busy');
+    searchAreaBtn.classList.remove('search-busy', 'loading');
+    const bar = searchBtnBar();
+    const fill = searchBtnFill();
+    const label = searchBtnLabel();
+    if (bar) {
+      bar.style.width = '0%';
+      bar.classList.remove('indeterminate');
+    }
+    if (fill) fill.style.width = '0%';
+    if (label) label.textContent = 'Search this area';
+  };
+
+  const setSearchAreaButtonCounting = () => {
+    if (!searchAreaBtn) return;
+    searchAreaBtn.disabled = true;
+    searchAreaBtn.setAttribute('aria-busy', 'true');
+    searchAreaBtn.classList.add('search-busy');
+    searchAreaBtn.classList.remove('loading');
+    const bar = searchBtnBar();
+    const fill = searchBtnFill();
+    const label = searchBtnLabel();
+    if (bar) bar.classList.add('indeterminate');
+    if (fill) fill.style.width = '0%';
+    if (label) label.textContent = 'Checking area…';
+  };
+
+  const setSearchAreaButtonAwaitingConfirm = (total: number) => {
+    const bar = searchBtnBar();
+    const fill = searchBtnFill();
+    const label = searchBtnLabel();
+    if (bar) {
+      bar.classList.remove('indeterminate');
+      bar.style.width = '0%';
+    }
+    if (fill) fill.style.width = '35%';
+    if (label) label.textContent = `${total.toLocaleString()} found — confirm in dialog`;
+  };
+
+  const beginSearchAreaLoadPhase = (maxToLoad: number) => {
+    if (!searchAreaBtn) return;
+    searchAreaBtn.classList.remove('search-busy');
+    searchAreaBtn.classList.add('loading');
+    const bar = searchBtnBar();
+    const fill = searchBtnFill();
+    const label = searchBtnLabel();
+    if (bar) {
+      bar.classList.remove('indeterminate');
+      bar.style.width = '0%';
+    }
+    if (fill) fill.style.width = '0%';
+    if (label) label.textContent = `Loading 0 / ${maxToLoad.toLocaleString()}…`;
+  };
+
+  const updateSearchAreaLoadProgress = (loaded: number, maxToLoad: number) => {
+    const pct = maxToLoad > 0 ? Math.min(100, (loaded / maxToLoad) * 100) : 0;
+    const bar = searchBtnBar();
+    const fill = searchBtnFill();
+    const label = searchBtnLabel();
+    if (bar) bar.style.width = `${pct}%`;
+    if (fill) fill.style.width = `${pct}%`;
+    if (label) label.textContent = `Loading ${loaded.toLocaleString()} / ${maxToLoad.toLocaleString()}…`;
+  };
 
   const TAXA_COLORS: Record<string, string> = {
     aves: '#3b82f6', mammalia: '#f97316', plantae: '#22c55e', insecta: '#a855f7',
@@ -203,10 +358,50 @@ export function initVectorSearch(
         .setContent(`<div class="vector-popup-loading">${getIconSvg('loader-2')}</div>`);
       marker.bindPopup(popup);
 
+      const scientificName = occ.scientificName || 'Unknown';
+      const initialNameRows = buildPreferredNameRows(occ, state.userLanguages, []);
+      const initialBestSubs = bestAndSubtitles(initialNameRows, scientificName);
+      marker.bindTooltip(buildOccurrenceHoverTooltipEl(initialBestSubs.best, initialBestSubs.subtitles), {
+        direction: 'top',
+        sticky: true,
+        opacity: 1,
+        interactive: false,
+        className: 'occurrence-name-tooltip-wrap',
+      });
+
+      let hoverTooltipDataPromise: Promise<{ best: PreferredNameRow; subtitles: PreferredNameRow[] }> | null = null;
+      const ensureHoverTooltipData = (): Promise<{ best: PreferredNameRow; subtitles: PreferredNameRow[] }> => {
+        if (!hoverTooltipDataPromise) {
+          hoverTooltipDataPromise = (async () => {
+            const taxonKey = getOccTaxonKey(occ);
+            const cachedVernaculars = await resolveVernacularNames(taxonKey);
+            const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
+            const localVernaculars = mergeWikiIntoVernaculars(cachedVernaculars, wiki);
+            const preferredNames = buildPreferredNameRows(occ, state.userLanguages, localVernaculars);
+            return bestAndSubtitles(preferredNames, scientificName);
+          })().catch((error) => {
+            console.error('Occurrence hover tooltip: failed to resolve names', {
+              taxonKey: getOccTaxonKey(occ),
+              error,
+            });
+            return initialBestSubs;
+          });
+        }
+        return hoverTooltipDataPromise;
+      };
+
       let precisionRingHover = false;
       marker.on('mouseover', () => {
         precisionRingHover = true;
         showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
+        if (marker.isPopupOpen()) {
+          marker.closeTooltip();
+          return;
+        }
+        void ensureHoverTooltipData().then((data) => {
+          if (marker.isPopupOpen()) return;
+          marker.setTooltipContent(buildOccurrenceHoverTooltipEl(data.best, data.subtitles));
+        });
       });
       marker.on('mouseout', () => {
         precisionRingHover = false;
@@ -224,40 +419,19 @@ export function initVectorSearch(
       });
 
       marker.on('popupopen', async () => {
+        marker.closeTooltip();
         showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
         scheduleVectorPopupFit(map, marker);
-        const taxonKey = occ.taxonKey || occ.speciesKey || occ.usageKey;
+        const taxonKey = getOccTaxonKey(occ);
         const cachedVernaculars = await resolveVernacularNames(taxonKey);
-        const localVernaculars = [...cachedVernaculars];
         const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
+        const localVernaculars = mergeWikiIntoVernaculars(cachedVernaculars, wiki);
         const datasetName = await resolveDatasetName(occ.datasetKey);
         const gbifImg = media ? gbifThumb(occ.key, media) : null;
         let currentImg = gbifImg || (wiki ? wiki.imgUrl : null);
 
-        if (wiki && wiki.labels) {
-          for (const [lc, name] of Object.entries(wiki.labels)) {
-            localVernaculars.unshift({ lang: lc, name });
-          }
-        }
-
-        const preferredNames: { name: string, lang: string, isScientific: boolean }[] = [];
-        for (const lc of state.userLanguages) {
-          if (lc === 'la') {
-            preferredNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
-          } else {
-            const match = localVernaculars.find(v => v.lang === lc);
-            if (match) {
-              const isSci = match.name.toLowerCase() === occ.scientificName.toLowerCase();
-              preferredNames.push({ name: match.name, lang: lc, isScientific: isSci });
-            }
-          }
-        }
-
-        const best = preferredNames[0] || { name: occ.scientificName, lang: 'la', isScientific: true };
-        const subtitleNames = preferredNames.filter(n => n !== best);
-        if (!best.isScientific && !subtitleNames.find(n => n.isScientific)) {
-          subtitleNames.push({ name: occ.scientificName, lang: 'la', isScientific: true });
-        }
+        const preferredNames = buildPreferredNameRows(occ, state.userLanguages, localVernaculars);
+        const { best, subtitles: subtitleNames } = bestAndSubtitles(preferredNames, scientificName);
 
         const vnHtml = subtitleNames.map(n => 
           `<div class="vernacular-popup" ${n.isScientific ? 'style="font-style: italic; opacity: 0.7;"' : ''}>
@@ -334,6 +508,8 @@ export function initVectorSearch(
   };
 
   searchAreaBtn?.addEventListener('click', async () => {
+    setSearchAreaButtonCounting();
+
     const bounds = map.getBounds();
     const south = Math.max(-90, bounds.getSouth()), north = Math.min(90, bounds.getNorth());
     const west = Math.max(-180, bounds.getWest()), east = Math.min(180, bounds.getEast());
@@ -350,6 +526,7 @@ export function initVectorSearch(
       if (!countRes.ok) {
         console.error('GBIF occurrence search (count) failed', { countUrl, status: countRes.status });
         showErrorToast(describeFetchFailure('gbif', null, countRes, getLastHealthSnapshot()));
+        resetSearchAreaButtonUi();
         return;
       }
       let countData: { count?: number };
@@ -358,35 +535,41 @@ export function initVectorSearch(
       } catch (parseErr) {
         console.error('GBIF occurrence search: invalid count JSON', { countUrl, error: parseErr });
         showErrorToast(describeFetchFailure('gbif', parseErr, countRes, getLastHealthSnapshot()));
+        resetSearchAreaButtonUi();
         return;
       }
       const totalCount = countData.count;
       if (typeof totalCount !== 'number' || !Number.isFinite(totalCount)) {
         console.error('GBIF occurrence search: missing or invalid count', { countUrl, countData });
         showErrorToast('Could not read occurrence count from GBIF.');
+        resetSearchAreaButtonUi();
         return;
       }
 
       if (totalCount === 0) {
         showErrorToast('No occurrences found in this area.');
+        resetSearchAreaButtonUi();
         return;
       }
 
       // 2. Threshold check & Confirmation
       if (totalCount > 300) {
+        setSearchAreaButtonAwaitingConfirm(totalCount);
         const confirmed = await showConfirm(
           'Load Large Dataset?',
           `${totalCount.toLocaleString()} occurrences found. Loading all records will take some time. Tip: zoom in or use filters for faster results.`
         );
-        if (!confirmed) return;
+        if (!confirmed) {
+          resetSearchAreaButtonUi();
+          return;
+        }
       }
 
-      // 3. Start Loading — hide biodiversity raster and outline the queried viewport
-      const progressBar = searchAreaBtn.querySelector('.search-progress-bar') as HTMLElement;
-      const btnSpan = searchAreaBtn.querySelector('span');
       const limit = 300;
       const maxToLoad = Math.min(totalCount, 10000);
       let loaded = 0;
+
+      beginSearchAreaLoadPhase(maxToLoad);
 
       const searchBounds = L.latLngBounds(L.latLng(south, west), L.latLng(north, east));
       removeVectorSearchBoundsRect();
@@ -409,12 +592,10 @@ export function initVectorSearch(
       vectorLayer.clearLayers();
       state.vectorMarkers = [];
       hideLegendFab();
-      searchAreaBtn.classList.add('loading');
 
       let pageError = false;
       while (loaded < maxToLoad && !pageError) {
-        if (btnSpan) btnSpan.textContent = `Loading ${loaded} / ${maxToLoad}...`;
-        if (progressBar) progressBar.style.width = `${(loaded / maxToLoad) * 100}%`;
+        updateSearchAreaLoadProgress(loaded, maxToLoad);
 
         const pageUrl = `${url}&limit=${limit}&offset=${loaded}`;
         const res = await fetch(pageUrl);
@@ -442,13 +623,12 @@ export function initVectorSearch(
 
         processOccurrences(data.results);
         loaded += data.results.length;
+        updateSearchAreaLoadProgress(loaded, maxToLoad);
 
         if (data.endOfRecords || data.results.length === 0) break;
       }
 
-      if (btnSpan) btnSpan.textContent = 'Search this area';
-      if (progressBar) progressBar.style.width = '0%';
-      searchAreaBtn.classList.remove('loading');
+      resetSearchAreaButtonUi();
 
       if (pageError) {
         restoreGbifAfterVectorSearch();
@@ -472,12 +652,12 @@ export function initVectorSearch(
       console.error('Area search failed', { error: e });
       restoreGbifAfterVectorSearch();
       removeVectorSearchBoundsRect();
+      resetSearchAreaButtonUi();
       showErrorToast(
         e instanceof Error
           ? describeFetchFailure('gbif', e, null, getLastHealthSnapshot())
           : describeFetchFailure('gbif', new Error(String(e)), null, getLastHealthSnapshot()),
       );
-      if (searchAreaBtn) searchAreaBtn.classList.remove('loading');
     }
   });
 
@@ -489,7 +669,10 @@ export function initVectorSearch(
     state.vectorMarkers = [];
     hideLegendFab();
     clearPointsBtn.classList.add('hidden');
-    if (searchAreaBtn) searchAreaBtn.classList.remove('hidden');
+    if (searchAreaBtn) {
+      searchAreaBtn.classList.remove('hidden');
+      resetSearchAreaButtonUi();
+    }
   });
 
   map.on('zoomend', () => {
