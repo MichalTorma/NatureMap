@@ -494,6 +494,7 @@ export function initVectorSearch(
       });
       
       state.vectorMarkers.push({
+        occurrenceKey: occ.key,
         cssClass: taxaInfo.cssClass, label: taxaInfo.label, iconUrl: taxaInfo.iconName, marker,
         taxonomy: {
           kingdom: occ.kingdom || '', phylum: occ.phylum || '', class: occ.class || '',

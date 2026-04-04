@@ -46,6 +46,21 @@
   cursor: wait;
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.bug-report-fab.loading {
+  background: rgba(251, 191, 36, 0.2);
+  pointer-events: none;
+  cursor: wait;
+}
+
+.bug-report-fab.loading svg {
+  animation: spin 1s linear infinite;
+}
+
 .bug-report-modal {
   position: fixed;
   inset: 0;
@@ -133,7 +148,6 @@
   display: block;
   width: 100%;
   height: auto;
-  vertical-align: middle;
 }
 
 .bug-report-diagnostics-label {
