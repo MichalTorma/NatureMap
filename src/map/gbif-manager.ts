@@ -51,8 +51,12 @@ export function initGbifLayerManager(map: L.Map, state: AppState) {
 
   const updateGbifLayer = () => {
     if (state.gbifLayer) map.removeLayer(state.gbifLayer);
-    if (!state.gbifEnabled) return;
-    
+    state.gbifLayer = null;
+    if (!state.gbifEnabled || state.suppressGbifForVectorOccurrences) {
+      state.syncStateToURL();
+      return;
+    }
+
     const url = buildGbifUrl();
     const isSpecial = state.currentRenderMode === 'circles' || state.currentRenderMode === 'marker';
     

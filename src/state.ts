@@ -32,6 +32,8 @@ export class AppState {
   vectorMarkers: any[] = [];
   gbifLayer: any = null;
   vectorLayer: any = null; // MarkerClusterGroup — set by initVectorSearch
+  /** Hide biodiversity raster while viewing loaded point occurrences (cleared on “clear” or failed load). */
+  suppressGbifForVectorOccurrences = false;
   config: AppConfig;
 
   constructor(config: AppConfig) {

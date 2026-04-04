@@ -26,6 +26,12 @@
   transform: translate(-50%, -20px);
 }
 
+/* Viewport used for “Search this area” occurrence load */
+.leaflet-container .vector-search-bounds-rect {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .search-area-btn {
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(10px);

@@ -21,7 +21,12 @@ import {
   precisionTierFromResolved,
 } from './occurrence-precision';
 
-export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLegend: () => void) {
+export function initVectorSearch(
+  map: L.Map,
+  state: AppState,
+  updateTaxonomyLegend: () => void,
+  updateGbifLayer: () => void,
+) {
   const searchAreaBtn = document.getElementById('search-area-btn');
   const clearPointsBtn = document.getElementById('clear-points-btn');
   const vectorControls = document.getElementById('vector-search-controls');
@@ -91,6 +96,20 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
     showCoverageOnHover: false
   }).addTo(map);
   state.vectorLayer = vectorLayer;
+
+  let vectorSearchBoundsRect: L.Rectangle | null = null;
+
+  const removeVectorSearchBoundsRect = () => {
+    if (vectorSearchBoundsRect) {
+      map.removeLayer(vectorSearchBoundsRect);
+      vectorSearchBoundsRect = null;
+    }
+  };
+
+  const restoreGbifAfterVectorSearch = () => {
+    state.suppressGbifForVectorOccurrences = false;
+    updateGbifLayer();
+  };
 
   const MAX_UNCERTAINTY_CIRCLE_M = MAX_UNCERTAINTY_DISPLAY_M;
   let activeUncertaintyCircle: L.Circle | null = null;
@@ -315,7 +334,6 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
   };
 
   searchAreaBtn?.addEventListener('click', async () => {
-    if (!state.gbifEnabled) return;
     const bounds = map.getBounds();
     const south = Math.max(-90, bounds.getSouth()), north = Math.min(90, bounds.getNorth());
     const west = Math.max(-180, bounds.getWest()), east = Math.min(180, bounds.getEast());
@@ -363,12 +381,29 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
         if (!confirmed) return;
       }
 
-      // 3. Start Loading
+      // 3. Start Loading — hide biodiversity raster and outline the queried viewport
       const progressBar = searchAreaBtn.querySelector('.search-progress-bar') as HTMLElement;
       const btnSpan = searchAreaBtn.querySelector('span');
       const limit = 300;
       const maxToLoad = Math.min(totalCount, 10000);
       let loaded = 0;
+
+      const searchBounds = L.latLngBounds(L.latLng(south, west), L.latLng(north, east));
+      removeVectorSearchBoundsRect();
+      vectorSearchBoundsRect = L.rectangle(searchBounds, {
+        className: 'vector-search-bounds-rect',
+        color: '#38bdf8',
+        weight: 2,
+        fill: true,
+        fillColor: '#38bdf8',
+        fillOpacity: 0.07,
+        dashArray: '10 8',
+        interactive: false,
+      }).addTo(map);
+      vectorSearchBoundsRect.bringToBack();
+
+      state.suppressGbifForVectorOccurrences = true;
+      updateGbifLayer();
 
       removeUncertaintyCircle();
       vectorLayer.clearLayers();
@@ -415,7 +450,11 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       if (progressBar) progressBar.style.width = '0%';
       searchAreaBtn.classList.remove('loading');
 
-      if (pageError) return;
+      if (pageError) {
+        restoreGbifAfterVectorSearch();
+        removeVectorSearchBoundsRect();
+        return;
+      }
 
       if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
       if (searchAreaBtn) searchAreaBtn.classList.add('hidden');
@@ -431,6 +470,8 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
       updateTaxonomyLegend();
     } catch (e) {
       console.error('Area search failed', { error: e });
+      restoreGbifAfterVectorSearch();
+      removeVectorSearchBoundsRect();
       showErrorToast(
         e instanceof Error
           ? describeFetchFailure('gbif', e, null, getLastHealthSnapshot())
@@ -442,6 +483,8 @@ export function initVectorSearch(map: L.Map, state: AppState, updateTaxonomyLege
 
   clearPointsBtn?.addEventListener('click', () => {
     removeUncertaintyCircle();
+    restoreGbifAfterVectorSearch();
+    removeVectorSearchBoundsRect();
     vectorLayer.clearLayers();
     state.vectorMarkers = [];
     hideLegendFab();

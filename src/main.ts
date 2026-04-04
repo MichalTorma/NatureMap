@@ -57,7 +57,7 @@ async function initMap() {
       }
     });
     initWelcome();
-    initVectorSearch(map, state, updateTaxonomyLegend);
+    initVectorSearch(map, state, updateTaxonomyLegend, updateGbifLayer);
     initBugReport(map, state, config);
 
     // Initial layer load
