@@ -6,8 +6,8 @@ import {
   resolveWikidataInfo,
   resolveVernacularNames,
   resolveDatasetName,
-  type VnName,
-  type WikiInfo,
+  negotiateTaxonNames,
+  type TaxonNameRow,
 } from './gbif';
 import { scheduleVectorPopupFit } from './core';
 import { getIconSvg } from '../ui/icons';
@@ -23,61 +23,17 @@ import {
   precisionTierFromResolved,
 } from './occurrence-precision';
 
-interface PreferredNameRow {
-  name: string;
-  lang: string;
-  isScientific: boolean;
-}
+// Using TaxonNameRow from gbif.ts instead of local PreferredNameRow
 
 function getOccTaxonKey(occ: { taxonKey?: number; speciesKey?: number; usageKey?: number }): number {
   return occ.taxonKey || occ.speciesKey || occ.usageKey || 0;
 }
 
-function mergeWikiIntoVernaculars(cached: VnName[], wiki: WikiInfo | null): VnName[] {
-  const local = [...cached];
-  if (wiki?.labels) {
-    for (const [lc, name] of Object.entries(wiki.labels)) {
-      local.unshift({ lang: lc, name });
-    }
-  }
-  return local;
-}
-
-function buildPreferredNameRows(
-  occ: { scientificName?: string },
-  userLanguages: string[],
-  localVernaculars: VnName[],
-): PreferredNameRow[] {
-  const scientificName = occ.scientificName || 'Unknown';
-  const preferredNames: PreferredNameRow[] = [];
-  for (const lc of userLanguages) {
-    if (lc === 'la') {
-      preferredNames.push({ name: scientificName, lang: 'la', isScientific: true });
-    } else {
-      const match = localVernaculars.find(v => v.lang === lc);
-      if (match) {
-        const isSci = match.name.toLowerCase() === scientificName.toLowerCase();
-        preferredNames.push({ name: match.name, lang: lc, isScientific: isSci });
-      }
-    }
-  }
-  return preferredNames;
-}
-
-function bestAndSubtitles(
-  preferredNames: PreferredNameRow[],
-  scientificName: string,
-): { best: PreferredNameRow; subtitles: PreferredNameRow[] } {
-  const best = preferredNames[0] || { name: scientificName, lang: 'la', isScientific: true };
-  const subtitleNames = preferredNames.filter(n => n !== best);
-  if (!best.isScientific && !subtitleNames.find(n => n.isScientific)) {
-    subtitleNames.push({ name: scientificName, lang: 'la', isScientific: true });
-  }
-  return { best, subtitles: subtitleNames };
-}
+// Removed buildPreferredNameRows, mergeWikiIntoVernaculars, and bestAndSubtitles 
+// in favor of centralized negotiateTaxonNames in gbif.ts
 
 /** Hover tooltip: primary + one row per other language in settings (same rules as popup). */
-function buildOccurrenceHoverTooltipEl(best: PreferredNameRow, subtitles: PreferredNameRow[]): HTMLElement {
+function buildOccurrenceHoverTooltipEl(best: TaxonNameRow, subtitles: TaxonNameRow[]): HTMLElement {
   const root = document.createElement('div');
   root.className = 'occurrence-hover-tooltip';
 
@@ -359,8 +315,7 @@ export function initVectorSearch(
       marker.bindPopup(popup);
 
       const scientificName = occ.scientificName || 'Unknown';
-      const initialNameRows = buildPreferredNameRows(occ, state.userLanguages, []);
-      const initialBestSubs = bestAndSubtitles(initialNameRows, scientificName);
+      const initialBestSubs = negotiateTaxonNames(scientificName, state.userLanguages, [], null);
       marker.bindTooltip(buildOccurrenceHoverTooltipEl(initialBestSubs.best, initialBestSubs.subtitles), {
         direction: 'top',
         sticky: true,
@@ -369,16 +324,14 @@ export function initVectorSearch(
         className: 'occurrence-name-tooltip-wrap',
       });
 
-      let hoverTooltipDataPromise: Promise<{ best: PreferredNameRow; subtitles: PreferredNameRow[] }> | null = null;
-      const ensureHoverTooltipData = (): Promise<{ best: PreferredNameRow; subtitles: PreferredNameRow[] }> => {
+      let hoverTooltipDataPromise: Promise<{ best: TaxonNameRow; subtitles: TaxonNameRow[] }> | null = null;
+      const ensureHoverTooltipData = (): Promise<{ best: TaxonNameRow; subtitles: TaxonNameRow[] }> => {
         if (!hoverTooltipDataPromise) {
           hoverTooltipDataPromise = (async () => {
             const taxonKey = getOccTaxonKey(occ);
             const cachedVernaculars = await resolveVernacularNames(taxonKey);
             const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
-            const localVernaculars = mergeWikiIntoVernaculars(cachedVernaculars, wiki);
-            const preferredNames = buildPreferredNameRows(occ, state.userLanguages, localVernaculars);
-            return bestAndSubtitles(preferredNames, scientificName);
+            return negotiateTaxonNames(scientificName, state.userLanguages, cachedVernaculars, wiki);
           })().catch((error) => {
             console.error('Occurrence hover tooltip: failed to resolve names', {
               taxonKey: getOccTaxonKey(occ),
@@ -425,13 +378,11 @@ export function initVectorSearch(
         const taxonKey = getOccTaxonKey(occ);
         const cachedVernaculars = await resolveVernacularNames(taxonKey);
         const wiki = await resolveWikidataInfo(taxonKey, state.userLanguages);
-        const localVernaculars = mergeWikiIntoVernaculars(cachedVernaculars, wiki);
         const datasetName = await resolveDatasetName(occ.datasetKey);
         const gbifImg = media ? gbifThumb(occ.key, media) : null;
         let currentImg = gbifImg || (wiki ? wiki.imgUrl : null);
 
-        const preferredNames = buildPreferredNameRows(occ, state.userLanguages, localVernaculars);
-        const { best, subtitles: subtitleNames } = bestAndSubtitles(preferredNames, scientificName);
+        const { best, subtitles: subtitleNames } = negotiateTaxonNames(scientificName, state.userLanguages, cachedVernaculars, wiki);
 
         const vnHtml = subtitleNames.map(n => 
           `<div class="vernacular-popup" ${n.isScientific ? 'style="font-style: italic; opacity: 0.7;"' : ''}>

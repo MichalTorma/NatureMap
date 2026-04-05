@@ -1,5 +1,5 @@
 import type { AppState } from '../state';
-import { resolveVernacularNames, resolveWikidataInfo } from '../map/gbif';
+import { resolveVernacularNames, resolveWikidataInfo, negotiateTaxonNames } from '../map/gbif';
 import { getIconSvg } from './icons';
 
 export interface HoverCardController {
@@ -87,12 +87,14 @@ export function initTaxonHoverCard(state: AppState): HoverCardController {
     // Bail if user already moved to another button
     if (activeHoverBtn !== btn) return;
 
-    const vnamesHtml = names.length > 0
-      ? names
-          .filter(n => state.userLanguages.includes(n.lang))
+    const { best, subtitles } = negotiateTaxonNames(sciName, state.userLanguages, names, wikiInfo);
+    const allPreferred = [best, ...subtitles];
+
+    const vnamesHtml = allPreferred.length > 0
+      ? allPreferred
           .slice(0, 6)
-          .map(n => `<span class="lang-tag">${n.lang.toUpperCase()}</span> ${n.name}`)
-          .join(' · ') || `<span class="lang-tag">INFO</span> No vernacular names`
+          .map(n => `<span class="lang-tag">${n.lang.toUpperCase()}</span> <span ${n.isScientific ? 'style="font-style:italic;opacity:0.8"' : ''}>${n.name}</span>`)
+          .join(' · ')
       : `<span class="lang-tag">INFO</span> No vernacular names`;
 
     const imgHtml = wikiInfo?.imgUrl
@@ -109,7 +111,7 @@ export function initTaxonHoverCard(state: AppState): HoverCardController {
     hoverCardEl.innerHTML = `
       <div class="vector-popup taxon-hover-inner">
         ${imgHtml ? `<div class="popup-image-container hover-img-container">${imgHtml}</div>` : ''}
-        <div class="title">${sciName}</div>
+        <div class="title" ${best.isScientific ? 'style="font-style: italic;"' : ''}>${best.name}</div>
         <div class="vernacular-popup">${vnamesHtml}</div>
         <hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);margin:8px 0"/>
         <div class="popup-links">${wikiLinkHtml}</div>
