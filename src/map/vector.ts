@@ -9,6 +9,7 @@ import {
   negotiateTaxonNames,
   type TaxonNameRow,
 } from './gbif';
+import { resolveBatchWikidataInfo } from './wikidata-sparql';
 import { scheduleVectorPopupFit } from './core';
 import { getIconSvg } from '../ui/icons';
 import { showErrorToast } from '../ui/toasts';
@@ -669,13 +670,16 @@ export function initVectorSearch(
       if (clearPointsBtn) clearPointsBtn.classList.remove('hidden');
       if (searchAreaBtn) searchAreaBtn.classList.add('hidden');
 
-      // Pre-warm vernacular name cache (fire-and-forget)
+      // Pre-warm vernacular name and Wikidata cache
       const speciesKeys = [...new Set(
         state.vectorMarkers
           .map(m => m.taxonomy.speciesKey)
           .filter((k): k is number => typeof k === 'number' && k > 0)
       )];
-      Promise.all(speciesKeys.map(k => resolveVernacularNames(k)));
+      Promise.all([
+        ...speciesKeys.map(k => resolveVernacularNames(k)),
+        resolveBatchWikidataInfo(speciesKeys, state.userLanguages)
+      ]);
 
       updateTaxonomyLegend();
     } catch (e) {

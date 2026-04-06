@@ -3,6 +3,7 @@ import type { AppState } from '../state';
 import type { HoverCardController } from './hover-card';
 import { buildTaxaTree, pruneTree, type TaxaNode } from '../map/taxonomy';
 import { resolveVernacularNames, vnCache, resolveWikidataInfo, negotiateTaxonNames } from '../map/gbif';
+import { resolveBatchWikidataInfo } from '../map/wikidata-sparql';
 import { getIconSvg } from './icons';
 
 // ─── Legend-local state ───────────────────────────────────────────────────────
@@ -103,9 +104,14 @@ async function updateTaxonNameWrap(wrap: HTMLElement, userLanguages: string[]): 
   }
 }
 
-async function prefetchVernaculars(taxonKeys: number[]): Promise<void> {
+async function prefetchTaxonInfo(taxonKeys: number[], userLanguages: string[]): Promise<void> {
   const uniq = [...new Set(taxonKeys.filter(k => k > 0))];
-  await Promise.all(uniq.map(k => resolveVernacularNames(k)));
+  // 1. Fetch vernacular names from GBIF (REST API, fast, but individual)
+  // 2. Fetch Wikidata info (SPARQL, massive batch)
+  await Promise.all([
+    ...uniq.map(k => resolveVernacularNames(k)),
+    resolveBatchWikidataInfo(uniq, userLanguages)
+  ]);
 }
 
 async function applyLegendLanguageToBody(body: HTMLElement, userLanguages: string[]): Promise<void> {
@@ -113,7 +119,7 @@ async function applyLegendLanguageToBody(body: HTMLElement, userLanguages: strin
   const keys = wraps
     .map(w => parseInt(w.dataset.taxonKey || '', 10))
     .filter(k => !Number.isNaN(k) && k > 0);
-  await prefetchVernaculars(keys);
+  await prefetchTaxonInfo(keys, userLanguages);
   await Promise.all(wraps.map(w => updateTaxonNameWrap(w, userLanguages)));
 }
 
