@@ -440,7 +440,7 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   padding: 2px 8px;
@@ -455,34 +455,60 @@
   z-index: 6;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
-.switch-image-btn {
+
+.image-switcher-tabs {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: white;
-  cursor: pointer;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 10;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 3px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 15;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  opacity: 0.95;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
-.switch-image-btn:hover {
-  background: var(--accent-color);
-  transform: scale(1.1);
-  border-color: rgba(255, 255, 255, 0.3);
+
+.image-switcher-tabs:hover {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.02);
 }
-.switch-image-btn:active { transform: scale(0.95); }
-.switch-image-btn svg { width: 14px; height: 14px; }
-.switch-image-btn.hidden { display: none; }
+
+.image-tab {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 5px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.image-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.image-tab.active {
+  background: #3b82f6; /* Hard-coded accent for popups to ensure contrast */
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.45);
+}
+
+.image-tab.active:hover {
+  background: #2563eb;
+}
 .wiki-link.hidden { display: none; }
 .vector-popup .title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; color: #fff; }
 .vector-popup .vernacular-popup { margin-bottom: 6px; }
