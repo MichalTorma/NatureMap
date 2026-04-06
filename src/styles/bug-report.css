@@ -139,19 +139,7 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
-.bug-report-preview-wrap {
-  border-radius: 12px;
-  overflow: auto;
-  max-height: 38vh;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.35);
-}
 
-.bug-report-preview-wrap img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
 
 .bug-report-diagnostics-label {
   font-size: 0.7rem;

@@ -61,18 +61,14 @@
             <i data-lucide="x"></i>
           </button>
         </div>
-        <p class="bug-report-modal-lede">Describe the bug below — that text is inserted into the GitHub draft for you (with screenshot and diagnostics). The screenshot uses a temporary <a href="https://tmpfiles.org/" rel="noopener noreferrer" target="_blank">tmpfiles.org</a> link so GitHub can show it. Then open GitHub, review, and submit.</p>
+        <p class="bug-report-modal-lede">Describe the bug below — that text is inserted into the GitHub draft for you (with diagnostics). Review the draft and submit on GitHub.</p>
         <label class="bug-report-diagnostics-label" for="bug-report-user-message">What happened?</label>
         <textarea id="bug-report-user-message" class="bug-report-user-message" rows="4" spellcheck="true" placeholder="What did you do, what went wrong, what did you expect?" aria-label="Describe the bug"></textarea>
-        <div class="bug-report-preview-wrap">
-          <img id="bug-report-preview" alt="Screenshot preview" />
-        </div>
         <label class="bug-report-diagnostics-label" for="bug-report-diagnostics">Diagnostics (read-only)</label>
         <textarea id="bug-report-diagnostics" readonly spellcheck="false" aria-label="Diagnostics JSON"></textarea>
         <div id="bug-report-status" aria-live="polite"></div>
         <div class="bug-report-actions">
           <button type="button" id="bug-report-copy" class="modal-btn secondary">Copy diagnostics</button>
-          <button type="button" id="bug-report-download" class="modal-btn secondary">Download PNG</button>
           <button type="button" id="bug-report-github" class="modal-btn primary bug-report-github-disabled">Open GitHub issue</button>
         </div>
       </div>
