@@ -21,6 +21,7 @@ import {
   shortUncertaintyBadgeText,
   uncertaintyBadgeTitle,
   precisionTierFromResolved,
+  type ResolvedLocationUncertainty,
 } from './occurrence-precision';
 
 // Using TaxonNameRow from gbif.ts instead of local PreferredNameRow
@@ -222,35 +223,91 @@ export function initVectorSearch(
     updateGbifLayer();
   };
 
-  const MAX_UNCERTAINTY_CIRCLE_M = MAX_UNCERTAINTY_DISPLAY_M;
-  let activeUncertaintyCircle: L.Circle | null = null;
+  const MAX_UNCERTAINTY_OVERLAY_M = MAX_UNCERTAINTY_DISPLAY_M;
+  let activeUncertaintyOverlays: L.Layer[] = [];
   let activeUncertaintyMarker: L.Marker | null = null;
 
-  const removeUncertaintyCircle = () => {
-    if (activeUncertaintyCircle) {
-      map.removeLayer(activeUncertaintyCircle);
-      activeUncertaintyCircle = null;
+  const removeUncertaintyOverlay = () => {
+    for (const layer of activeUncertaintyOverlays) {
+      map.removeLayer(layer);
     }
+    activeUncertaintyOverlays = [];
     activeUncertaintyMarker = null;
   };
 
-  const showUncertaintyCircleForMarker = (marker: L.Marker, meters: number | null) => {
-    removeUncertaintyCircle();
-    if (meters === null || !Number.isFinite(meters) || meters <= 0) return;
+  const showUncertaintyOverlayForMarker = (marker: L.Marker, res: ResolvedLocationUncertainty) => {
+    removeUncertaintyOverlay();
+    if (res.meters === null || !Number.isFinite(res.meters) || res.meters <= 0) return;
 
-    const radiusM = Math.min(Math.max(meters, 1), MAX_UNCERTAINTY_CIRCLE_M);
     activeUncertaintyMarker = marker;
-    activeUncertaintyCircle = L.circle(marker.getLatLng(), {
-      radius: radiusM,
-      color: 'rgba(14, 165, 233, 0.92)',
-      weight: 2,
-      fillColor: '#0ea5e9',
-      fillOpacity: 0.1,
-      dashArray: '8 10',
-      interactive: false,
-      className: 'occurrence-uncertainty-circle',
-    }).addTo(map);
-    activeUncertaintyCircle.bringToBack();
+    const latlng = marker.getLatLng();
+
+    if (res.source === 'gbif_uncertainty_meters') {
+      const radiusM = Math.min(Math.max(res.meters, 1), MAX_UNCERTAINTY_OVERLAY_M);
+      const circle = L.circle(latlng, {
+        radius: radiusM,
+        color: 'rgba(14, 165, 233, 0.92)',
+        weight: 2,
+        fillColor: '#0ea5e9',
+        fillOpacity: 0.1,
+        dashArray: '8 10',
+        interactive: false,
+        className: 'occurrence-uncertainty-overlay',
+      }).addTo(map);
+      circle.bringToBack();
+      activeUncertaintyOverlays.push(circle);
+    } else if (res.detail.stepLatDeg && res.detail.stepLngDeg) {
+      // "Rounded" interpretation: pin is at the center of the grid cell
+      const halfLat = res.detail.stepLatDeg / 2;
+      const halfLng = res.detail.stepLngDeg / 2;
+      const centeredBounds = L.latLngBounds(
+        [latlng.lat - halfLat, latlng.lng - halfLng],
+        [latlng.lat + halfLat, latlng.lng + halfLng]
+      );
+      const centeredRect = L.rectangle(centeredBounds, {
+        color: 'rgba(14, 165, 233, 0.92)',
+        weight: 2,
+        fillColor: '#0ea5e9',
+        fillOpacity: 0.08,
+        dashArray: '8 10',
+        interactive: false,
+        className: 'occurrence-uncertainty-overlay occurrence-uncertainty-rounded',
+      }).addTo(map);
+      centeredRect.bringToBack();
+      activeUncertaintyOverlays.push(centeredRect);
+
+      // "Truncated" interpretation: pin is at the SW corner of the grid cell
+      const cornerBounds = L.latLngBounds(
+        [latlng.lat, latlng.lng],
+        [latlng.lat + res.detail.stepLatDeg, latlng.lng + res.detail.stepLngDeg]
+      );
+      const cornerRect = L.rectangle(cornerBounds, {
+        color: 'rgba(251, 191, 36, 0.8)',
+        weight: 2,
+        fillColor: '#fbbf24',
+        fillOpacity: 0.06,
+        dashArray: '4 6',
+        interactive: false,
+        className: 'occurrence-uncertainty-overlay occurrence-uncertainty-truncated',
+      }).addTo(map);
+      cornerRect.bringToBack();
+      activeUncertaintyOverlays.push(cornerRect);
+    } else {
+      // Fallback to circle
+      const radiusM = Math.min(Math.max(res.meters, 1), MAX_UNCERTAINTY_OVERLAY_M);
+      const circle = L.circle(latlng, {
+        radius: radiusM,
+        color: 'rgba(14, 165, 233, 0.92)',
+        weight: 2,
+        fillColor: '#0ea5e9',
+        fillOpacity: 0.1,
+        dashArray: '8 10',
+        interactive: false,
+        className: 'occurrence-uncertainty-overlay',
+      }).addTo(map);
+      circle.bringToBack();
+      activeUncertaintyOverlays.push(circle);
+    }
   };
 
   const hideLegendFab = () => {
@@ -346,7 +403,7 @@ export function initVectorSearch(
       let precisionRingHover = false;
       marker.on('mouseover', () => {
         precisionRingHover = true;
-        showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
+        showUncertaintyOverlayForMarker(marker, uncertaintyRes);
         if (marker.isPopupOpen()) {
           marker.closeTooltip();
           return;
@@ -358,22 +415,43 @@ export function initVectorSearch(
       });
       marker.on('mouseout', () => {
         precisionRingHover = false;
-        if (!marker.isPopupOpen()) removeUncertaintyCircle();
+        if (!marker.isPopupOpen()) removeUncertaintyOverlay();
       });
       marker.on('popupclose', () => {
-        if (precisionRingHover) showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
-        else removeUncertaintyCircle();
+        if (precisionRingHover) showUncertaintyOverlayForMarker(marker, uncertaintyRes);
+        else removeUncertaintyOverlay();
       });
 
       marker.on('move', () => {
-        if (activeUncertaintyCircle && activeUncertaintyMarker === marker) {
-          activeUncertaintyCircle.setLatLng(marker.getLatLng());
+        if (activeUncertaintyOverlays.length > 0 && activeUncertaintyMarker === marker) {
+          const ll = marker.getLatLng();
+          for (const layer of activeUncertaintyOverlays) {
+            if (layer instanceof L.Circle) {
+              layer.setLatLng(ll);
+            } else if (layer instanceof L.Rectangle) {
+              const el = (layer as any).getElement?.();
+              const isTruncated = el?.classList?.contains('occurrence-uncertainty-truncated');
+              if (isTruncated) {
+                layer.setBounds(L.latLngBounds(
+                  [ll.lat, ll.lng],
+                  [ll.lat + uncertaintyRes.detail.stepLatDeg!, ll.lng + uncertaintyRes.detail.stepLngDeg!]
+                ));
+              } else {
+                const halfLat = uncertaintyRes.detail.stepLatDeg! / 2;
+                const halfLng = uncertaintyRes.detail.stepLngDeg! / 2;
+                layer.setBounds(L.latLngBounds(
+                  [ll.lat - halfLat, ll.lng - halfLng],
+                  [ll.lat + halfLat, ll.lng + halfLng]
+                ));
+              }
+            }
+          }
         }
       });
 
       marker.on('popupopen', async () => {
         marker.closeTooltip();
-        showUncertaintyCircleForMarker(marker, uncertaintyRes.meters);
+        showUncertaintyOverlayForMarker(marker, uncertaintyRes);
         scheduleVectorPopupFit(map, marker);
         const taxonKey = getOccTaxonKey(occ);
         const cachedVernaculars = await resolveVernacularNames(taxonKey);
@@ -540,7 +618,7 @@ export function initVectorSearch(
       state.suppressGbifForVectorOccurrences = true;
       updateGbifLayer();
 
-      removeUncertaintyCircle();
+      removeUncertaintyOverlay();
       vectorLayer.clearLayers();
       state.vectorMarkers = [];
       hideLegendFab();
@@ -614,7 +692,7 @@ export function initVectorSearch(
   });
 
   clearPointsBtn?.addEventListener('click', () => {
-    removeUncertaintyCircle();
+    removeUncertaintyOverlay();
     restoreGbifAfterVectorSearch();
     removeVectorSearchBoundsRect();
     vectorLayer.clearLayers();

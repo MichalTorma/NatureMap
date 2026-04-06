@@ -22,6 +22,10 @@ export interface ResolvedLocationUncertainty {
     asDecimalDigits?: number;
     decimalPlacesLat?: number;
     decimalPlacesLng?: number;
+    /** Grid cell width (if source is grid-based) */
+    stepLatDeg?: number;
+    /** Grid cell height (if source is grid-based) */
+    stepLngDeg?: number;
   };
 }
 
@@ -63,7 +67,7 @@ function capMeters(m: number): number {
 function metersFromCoordinatePrecisionField(
   occ: Record<string, unknown>,
   latDeg: number,
-): { meters: number; precisionDeg?: number; asDecimalDigits?: number } | null {
+): { meters: number; precisionDeg?: number; asDecimalDigits?: number; stepLatDeg?: number; stepLngDeg?: number } | null {
   const p = parseNumericField(occ.coordinatePrecision);
   if (p === null || p <= 0) return null;
 
@@ -71,13 +75,13 @@ function metersFromCoordinatePrecisionField(
   if (p >= 1 && p <= 15 && Number.isInteger(p)) {
     const deg = Math.pow(10, -p);
     const m = halfDiagonalMetersFromSteps(deg, deg, latDeg);
-    return { meters: capMeters(m), asDecimalDigits: p };
+    return { meters: capMeters(m), asDecimalDigits: p, stepLatDeg: deg, stepLngDeg: deg };
   }
 
   // Typical Darwin Core: precision in decimal degrees (e.g. 0.00001)
   if (p < 1) {
     const m = halfDiagonalMetersFromSteps(p, p, latDeg);
-    return { meters: capMeters(m), precisionDeg: p };
+    return { meters: capMeters(m), precisionDeg: p, stepLatDeg: p, stepLngDeg: p };
   }
 
   return null;
@@ -87,6 +91,8 @@ function estimateMetersFromDecimalPlaces(lat: number, lng: number): {
   meters: number;
   decimalPlacesLat: number;
   decimalPlacesLng: number;
+  stepLatDeg: number;
+  stepLngDeg: number;
 } | null {
   const dlat = decimalPlacesFromNumber(lat);
   const dlng = decimalPlacesFromNumber(lng);
@@ -98,6 +104,8 @@ function estimateMetersFromDecimalPlaces(lat: number, lng: number): {
     meters: capMeters(m),
     decimalPlacesLat: dlat,
     decimalPlacesLng: dlng,
+    stepLatDeg: stepLatDeg,
+    stepLngDeg: stepLngDeg,
   };
 }
 
@@ -129,6 +137,8 @@ export function resolveLocationUncertainty(occ: Record<string, unknown>): Resolv
       detail: {
         precisionDeg: fromPrec.precisionDeg,
         asDecimalDigits: fromPrec.asDecimalDigits,
+        stepLatDeg: fromPrec.stepLatDeg,
+        stepLngDeg: fromPrec.stepLngDeg,
       },
     };
   }
@@ -142,6 +152,8 @@ export function resolveLocationUncertainty(occ: Record<string, unknown>): Resolv
       detail: {
         decimalPlacesLat: fromDec.decimalPlacesLat,
         decimalPlacesLng: fromDec.decimalPlacesLng,
+        stepLatDeg: fromDec.stepLatDeg,
+        stepLngDeg: fromDec.stepLngDeg,
       },
     };
   }
@@ -230,7 +242,9 @@ export function humanUncertaintyPopupHtml(res: ResolvedLocationUncertainty): str
     return (
       `<span class="popup-precision-estimated">~ Estimated</span> — ${precBit} ` +
       `Converted to ground distance at this latitude, that is about <strong>±${r}</strong> ` +
-      `(half diagonal of the implied grid cell — approximate).`
+      `(half diagonal of the implied grid cell).` +
+      `<br><span style="color:#38bdf8">■</span> <strong>Blue</strong> = if the coordinate was <em>rounded</em> (pin at center). ` +
+      `<span style="color:#fbbf24">■</span> <strong>Amber</strong> = if <em>truncated</em> (pin at SW corner).`
     );
   }
 
@@ -248,6 +262,8 @@ export function humanUncertaintyPopupHtml(res: ResolvedLocationUncertainty): str
   return (
     `<span class="popup-precision-estimated">~ Estimated</span> — No uncertainty fields; we inferred a grid from ` +
     `the coordinates: ${latNote}; ${lngNote}. That suggests about <strong>±${r}</strong> on the ground ` +
-    `(approximate — <strong>trailing zeros are not visible</strong> in JSON numbers).`
+    `(approximate — <strong>trailing zeros are not visible</strong> in JSON numbers).` +
+    `<br><span style="color:#38bdf8">■</span> <strong>Blue</strong> = if the coordinate was <em>rounded</em> (pin at center). ` +
+    `<span style="color:#fbbf24">■</span> <strong>Amber</strong> = if <em>truncated</em> (pin at SW corner).`
   );
 }
