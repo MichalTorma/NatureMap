@@ -474,8 +474,10 @@ export function initVectorSearch(
         content.innerHTML = `
           ${currentImg ? `<div class="popup-image-container">
               <img src="${currentImg}" alt="${best.name}">
-              ${(gbifImg && wiki?.imgUrl) ? `<button class="switch-image-btn" title="Switch Image Source">${getIconSvg('refresh-cw')}</button>` : ''}
-              <div class="image-source-badge">${currentImg === gbifImg ? 'GBIF' : 'WIKI'}</div>
+              ${(gbifImg && wiki?.imgUrl) ? `<div class="image-switcher-tabs" role="tablist">
+                <button type="button" class="image-tab ${currentImg === gbifImg ? 'active' : ''}" data-source="gbif" role="tab" aria-selected="${currentImg === gbifImg}">GBIF</button>
+                <button type="button" class="image-tab ${currentImg === wiki.imgUrl ? 'active' : ''}" data-source="wiki" role="tab" aria-selected="${currentImg === wiki.imgUrl}">Wiki</button>
+              </div>` : `<div class="image-source-badge">${currentImg === gbifImg ? 'GBIF' : 'WIKI'}</div>`}
             </div>` : ''}
           <div class="title" ${best.isScientific ? 'style="font-style: italic;"' : ''}>${best.name}</div>
           <div class="subtitle-group">${vnHtml}</div>
@@ -491,21 +493,24 @@ export function initVectorSearch(
           </div>
         `;
 
-        const switchBtn = content.querySelector('.switch-image-btn');
-        const badge = content.querySelector('.image-source-badge');
+        const tabs = content.querySelectorAll<HTMLButtonElement>('.image-tab');
         const img = content.querySelector('img') as HTMLImageElement;
         
-        switchBtn?.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (currentImg === gbifImg) {
-            currentImg = wiki?.imgUrl || gbifImg;
-            if (badge) badge.textContent = 'WIKI';
-          } else {
-            currentImg = gbifImg;
-            if (badge) badge.textContent = 'GBIF';
-          }
-          if (img) img.src = currentImg!;
+        tabs.forEach(tab => {
+          tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const source = tab.getAttribute('data-source');
+            const newImg = source === 'gbif' ? gbifImg : wiki?.imgUrl;
+            if (newImg && img) {
+              img.src = newImg;
+              tabs.forEach(t => {
+                const isActive = t === tab;
+                t.classList.toggle('active', isActive);
+                t.setAttribute('aria-selected', String(isActive));
+              });
+            }
+          });
         });
 
         const gbifOccUrl = `https://www.gbif.org/occurrence/${occ.key}`;
