@@ -1,9 +1,10 @@
 import L from 'leaflet';
+import { AppState } from '../state';
 import { getIconSvg } from './icons';
 
 export type GeoStatus = 'unknown' | 'ok' | 'denied' | 'unavailable' | 'timeout';
 
-export function initGeo(map: L.Map) {
+export function initGeo(map: L.Map, state: AppState) {
   const locateBtn = document.getElementById('locate-btn');
   const geoToast = document.getElementById('geo-toast');
   let userMarker: L.Marker | null = null;
@@ -124,6 +125,7 @@ export function initGeo(map: L.Map) {
             }),
             zIndexOffset: 1000
           }).addTo(map);
+          state.userLocationMarker = userMarker;
         }
         map.flyTo(latlng, 15, { duration: 1.5 });
         if (locateBtn) locateBtn.classList.remove('loading');

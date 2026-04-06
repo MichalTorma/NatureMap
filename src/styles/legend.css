@@ -3,9 +3,7 @@
   .leaflet-control-zoom { display: none; }
 }
 
-@media (min-width: 769px) {
-  .panel-overlay { display: none !important; }
-}
+/* panel-overlay: shown whenever biodiversity or languages panel is open (all viewports) */
 
 /* ============ Vector Legend ============ */
 .vector-legend {

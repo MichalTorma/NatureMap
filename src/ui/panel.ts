@@ -28,6 +28,7 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   const panelOverlay = document.getElementById('panel-overlay');
   const gbifFab = document.getElementById('gbif-fab');
   const gbifToggle = document.getElementById('gbif-toggle') as HTMLInputElement;
+  const gbifMenuToggle = document.getElementById('gbif-menu-toggle') as HTMLInputElement;
   const gbifSearch = document.getElementById('gbif-search') as HTMLInputElement;
   const gbifResults = document.getElementById('gbif-results') as HTMLElement;
   const historyShelf = document.getElementById('gbif-history');
@@ -48,6 +49,12 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   };
 
   const openGbifPanel = () => {
+    document.getElementById('base-layer-popover')?.classList.remove('open');
+    document.getElementById('lang-panel')?.classList.remove('open');
+    document.getElementById('lang-fab')?.classList.remove('panel-open');
+    const langPanelEl = document.getElementById('lang-panel') as HTMLElement | null;
+    if (langPanelEl) langPanelEl.style.transform = '';
+
     gbifPanel?.classList.add('open');
     gbifFab?.classList.add('panel-open');
     panelOverlay?.classList.add('active');
@@ -59,7 +66,10 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
     gbifFab?.classList.remove('panel-open');
     panelOverlay?.classList.remove('active');
     if (gbifPanel) gbifPanel.style.transform = '';
-    if (!document.getElementById('vector-legend')?.classList.contains('open')) {
+    if (
+      !document.getElementById('vector-legend')?.classList.contains('open') &&
+      !document.getElementById('lang-panel')?.classList.contains('open')
+    ) {
       document.body.classList.remove('panel-active');
     }
   };
@@ -71,7 +81,6 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   });
 
   gbifPanelClose?.addEventListener('click', closeGbifPanel);
-  panelOverlay?.addEventListener('click', closeGbifPanel);
 
   const updateGbifFabState = () => {
     gbifFab?.classList.toggle('active', state.gbifEnabled);
@@ -80,11 +89,13 @@ export function initGbifPanel(_map: L.Map, state: AppState, updateGbifLayer: () 
   const handleGbifToggle = (enabled: boolean) => {
     state.gbifEnabled = enabled;
     if (gbifToggle) gbifToggle.checked = enabled;
+    if (gbifMenuToggle) gbifMenuToggle.checked = enabled;
     updateGbifFabState();
     updateGbifLayer();
   };
 
   gbifToggle?.addEventListener('change', () => handleGbifToggle(gbifToggle.checked));
+  gbifMenuToggle?.addEventListener('change', () => handleGbifToggle(gbifMenuToggle.checked));
 
   const updateFilterLabel = (name: string | null) => {
     const label = gbifFab?.querySelector('.gbif-filter-label');

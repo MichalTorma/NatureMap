@@ -12,6 +12,12 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
   const panelOverlay = document.getElementById('panel-overlay');
 
   const openLangPanel = () => {
+    document.getElementById('gbif-panel')?.classList.remove('open');
+    document.getElementById('gbif-fab')?.classList.remove('panel-open');
+    const gbifPanelEl = document.getElementById('gbif-panel') as HTMLElement | null;
+    if (gbifPanelEl) gbifPanelEl.style.transform = '';
+    document.getElementById('base-layer-popover')?.classList.remove('open');
+
     langPanel?.classList.add('open');
     langFab?.classList.add('panel-open');
     panelOverlay?.classList.add('active');
@@ -22,7 +28,13 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
     langPanel?.classList.remove('open');
     langFab?.classList.remove('panel-open');
     panelOverlay?.classList.remove('active');
-    document.body.classList.remove('panel-active');
+    if (langPanel) (langPanel as HTMLElement).style.transform = '';
+    if (
+      !document.getElementById('vector-legend')?.classList.contains('open') &&
+      !document.getElementById('gbif-panel')?.classList.contains('open')
+    ) {
+      document.body.classList.remove('panel-active');
+    }
   };
 
   langFab?.addEventListener('click', () => {
@@ -31,7 +43,6 @@ export function initLanguages(state: AppState, onLanguagesChanged: () => void) {
   });
 
   langPanelClose?.addEventListener('click', closeLangPanel);
-  panelOverlay?.addEventListener('click', closeLangPanel);
 
   const saveLanguages = () => {
     localStorage.setItem(STORAGE_KEY_LANGS, JSON.stringify(state.userLanguages));

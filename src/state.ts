@@ -32,6 +32,9 @@ export class AppState {
   vectorMarkers: any[] = [];
   gbifLayer: any = null;
   vectorLayer: any = null; // MarkerClusterGroup — set by initVectorSearch
+  userLocationMarker: L.Marker | null = null;
+  /** Hide biodiversity raster while viewing loaded point occurrences (cleared on “clear” or failed load). */
+  suppressGbifForVectorOccurrences = false;
   config: AppConfig;
 
   constructor(config: AppConfig) {
@@ -74,6 +77,17 @@ export class AppState {
     }
     
     window.location.hash = params.toString();
+  }
+
+  /** Gets the current map URL but with lat/lng/zoom redacted for privacy. */
+  getRedactedURL(): string {
+    const u = new URL(window.location.href);
+    const params = new URLSearchParams(u.hash.slice(1));
+    if (params.has('lat')) params.set('lat', '<redacted>');
+    if (params.has('lng')) params.set('lng', '<redacted>');
+    if (params.has('z')) params.set('z', '<redacted>');
+    u.hash = params.toString();
+    return u.toString();
   }
 
   private loadFromURL() {

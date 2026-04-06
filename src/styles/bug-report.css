@@ -6,6 +6,12 @@
   z-index: 2500;
 }
 
+.bug-report-fab-cluster {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+}
+
 .bug-report-fab {
   width: 48px;
   height: 48px;
@@ -38,6 +44,21 @@
 .bug-report-fab:disabled {
   opacity: 0.65;
   cursor: wait;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.bug-report-fab.loading {
+  background: rgba(251, 191, 36, 0.2);
+  pointer-events: none;
+  cursor: wait;
+}
+
+.bug-report-fab.loading svg {
+  animation: spin 1s linear infinite;
 }
 
 .bug-report-modal {
@@ -127,7 +148,6 @@
   display: block;
   width: 100%;
   height: auto;
-  vertical-align: middle;
 }
 
 .bug-report-diagnostics-label {

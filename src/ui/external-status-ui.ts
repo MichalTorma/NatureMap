@@ -49,15 +49,14 @@ function renderDetailList(snap: HealthSnapshot, listEl: HTMLElement) {
 }
 
 export function initExternalStatusUi(): void {
-  const btn = document.getElementById('external-status-btn');
+  const btn = document.getElementById('external-status-btn') as HTMLButtonElement | null;
   const popover = document.getElementById('external-status-popover');
   const dot = document.getElementById('external-status-dot');
-  const label = document.getElementById('external-status-label');
   const listEl = document.getElementById('external-status-list');
   const refreshBtn = document.getElementById('external-status-refresh');
   const summaryEl = document.getElementById('external-status-summary');
 
-  if (!btn || !popover || !dot || !label || !listEl || !refreshBtn) {
+  if (!btn || !popover || !dot || !listEl || !refreshBtn) {
     console.error('external-status-ui: missing DOM nodes', {
       hasBtn: !!btn,
       hasPopover: !!popover,
@@ -67,8 +66,16 @@ export function initExternalStatusUi(): void {
 
   let open = false;
 
+  const closePopover = () => {
+    open = false;
+    btn.setAttribute('aria-expanded', 'false');
+    popover.classList.remove('open');
+  };
+
   const applySnapshot = (snap: HealthSnapshot | null) => {
     const level = getHealthLevel(snap);
+    const showBubble = snap !== null && level !== 'ok';
+
     dot.className =
       'external-status-dot' +
       (level === 'ok'
@@ -78,19 +85,25 @@ export function initExternalStatusUi(): void {
           : level === 'critical'
             ? ' bad'
             : ' unknown');
-    if (level === 'ok') {
-      label.textContent = 'Services';
-      btn.title = 'External services: all checks passed';
-    } else if (level === 'degraded') {
-      label.textContent = 'Services';
-      btn.title = 'Wikidata may be unavailable; GBIF looks OK';
-    } else if (level === 'critical') {
-      label.textContent = 'Services';
-      btn.title = 'GBIF or essential services look unavailable — click for details';
+
+    if (showBubble) {
+      btn.hidden = false;
+      if (level === 'degraded') {
+        btn.title = 'Wikidata may be unavailable — tap for details';
+        btn.setAttribute('aria-label', 'External services: Wikidata issue — view details');
+      } else if (level === 'critical') {
+        btn.title = 'GBIF or essential services look unavailable — tap for details';
+        btn.setAttribute('aria-label', 'External services: critical issue — view details');
+      } else {
+        btn.title = 'Checking external services…';
+        btn.setAttribute('aria-label', 'External services status');
+      }
     } else {
-      label.textContent = 'Services';
-      btn.title = 'Checking external services…';
+      btn.hidden = true;
+      btn.title = '';
+      closePopover();
     }
+
     if (snap && summaryEl) {
       const when = formatCheckedAt(snap.checkedAt);
       summaryEl.textContent = `Last check: ${when}`;
@@ -104,6 +117,7 @@ export function initExternalStatusUi(): void {
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (btn.hidden) return;
     open = !open;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     popover.classList.toggle('open', open);
@@ -117,9 +131,7 @@ export function initExternalStatusUi(): void {
   document.addEventListener('click', (e) => {
     if (!popover.classList.contains('open')) return;
     if (btn.contains(e.target as Node) || popover.contains(e.target as Node)) return;
-    open = false;
-    btn.setAttribute('aria-expanded', 'false');
-    popover.classList.remove('open');
+    closePopover();
   });
 
   const runRefresh = async (isManual: boolean) => {
@@ -147,7 +159,6 @@ export function initExternalStatusUi(): void {
     void runRefresh(true);
   });
 
-  /** Initial + periodic + tab visible */
   void runExternalHealthChecks();
   setInterval(() => void runExternalHealthChecks(), 10 * 60 * 1000);
   document.addEventListener('visibilitychange', () => {

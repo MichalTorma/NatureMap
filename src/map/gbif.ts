@@ -147,14 +147,73 @@ export async function resolveVernacularNames(taxonKey: number): Promise<VnName[]
  * Negotiates the best display name based on user language preferences.
  * 'la' (Latin) is treated as a request for the Scientific Name.
  */
-export function getBestTaxonName(scientificName: string, userLanguages: string[], allVernaculars: VnName[]): { name: string, lang: string, isScientific: boolean } {
-  for (const lc of userLanguages) {
-    if (lc === 'la') return { name: scientificName, lang: 'la', isScientific: true };
-    const match = allVernaculars.find(v => v.lang === lc);
-    if (match) return { name: match.name, lang: lc, isScientific: false };
+export interface TaxonNameRow {
+  name: string;
+  lang: string;
+  isScientific: boolean;
+}
+
+export function negotiateTaxonNames(
+  scientificName: string,
+  userLanguages: string[],
+  gbifVernaculars: VnName[],
+  wikiInfo: WikiInfo | null
+): { best: TaxonNameRow, subtitles: TaxonNameRow[] } {
+  const allCandidates: VnName[] = [...gbifVernaculars];
+  if (wikiInfo?.labels) {
+    for (const [lang, name] of Object.entries(wikiInfo.labels)) {
+      // Prioritize Wikidata labels by unshifting
+      allCandidates.unshift({ lang, name });
+    }
   }
-  // Ultimate fallback to Scientific Name if nothing in user list matched
-  return { name: scientificName, lang: 'la', isScientific: true };
+
+  const preferred: TaxonNameRow[] = [];
+  const seenLangs = new Set<string>();
+
+  for (const lc of userLanguages) {
+    if (lc === 'la') {
+      if (!seenLangs.has('la')) {
+        preferred.push({ name: scientificName, lang: 'la', isScientific: true });
+        seenLangs.add('la');
+      }
+      continue;
+    }
+
+    const matches = allCandidates.filter(c => c.lang === lc);
+    if (matches.length > 0) {
+      const isLikeScientific = (name: string) => {
+        const n = name.toLowerCase().trim();
+        const s = scientificName.toLowerCase().trim();
+        return n === s || s.startsWith(n + ' ');
+      };
+
+      // CRITICAL FIX: Prefer a name that is NOT the scientific name
+      const commonMatch = matches.find(m => !isLikeScientific(m.name));
+      const selected = commonMatch || matches[0];
+      const isSci = isLikeScientific(selected.name);
+      
+      if (!seenLangs.has(lc)) {
+        preferred.push({ name: selected.name, lang: lc, isScientific: isSci });
+        seenLangs.add(lc);
+      }
+    }
+  }
+
+  const best = preferred[0] || { name: scientificName, lang: 'la', isScientific: true };
+  const subtitles = preferred.filter(p => p !== best);
+
+  // Ensure scientific name is always available in subtitles if not already the best title
+  if (!best.isScientific && !subtitles.find(s => s.isScientific)) {
+    subtitles.push({ name: scientificName, lang: 'la', isScientific: true });
+  }
+
+  return { best, subtitles };
+}
+
+export function getBestTaxonName(scientificName: string, userLanguages: string[], allVernaculars: VnName[]): { name: string, lang: string, isScientific: boolean } {
+  // Keeping this for potential legacy use, but it should ideally be replaced by negotiateTaxonNames
+  const { best } = negotiateTaxonNames(scientificName, userLanguages, allVernaculars, null);
+  return best;
 }
 
 

@@ -2,6 +2,7 @@ import html2canvas from 'html2canvas';
 import type L from 'leaflet';
 import { AppState } from '../state';
 import type { AppConfig } from '../types';
+import { vnCache, wikidataCache } from '../map/gbif';
 import { initIcons } from './icons';
 import { showErrorToast } from './toasts';
 
@@ -17,9 +18,35 @@ type LastReportPayload = {
   snapshot: Snapshot;
 };
 
-function buildSnapshot(map: L.Map, state: AppState) {
-  const center = map.getCenter();
-  const bounds = map.getBounds();
+function buildSnapshot(_map: L.Map, state: AppState) {
+  const activeMarkerEntry = state.vectorMarkers.find(m => m.marker.isPopupOpen());
+  
+  // Species Summary from current vector markers
+  const speciesMap = new Map<number, { name: string, count: number }>();
+  state.vectorMarkers.forEach(m => {
+    const key = m.taxonomy.speciesKey;
+    if (typeof key === 'number' && key > 0) {
+      const existing = speciesMap.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        speciesMap.set(key, { name: m.taxonomy.species, count: 1 });
+      }
+    }
+  });
+  const loadedSpecies = Array.from(speciesMap.entries()).map(([key, info]) => {
+    const translations = {
+      gbif: vnCache.get(key) || [],
+      wikidata: wikidataCache.get(key)?.labels || {}
+    };
+    return {
+      key,
+      name: info.name,
+      count: info.count,
+      translations
+    };
+  });
+
   return {
     capturedAt: new Date().toISOString(),
     url: window.location.href,
@@ -30,13 +57,13 @@ function buildSnapshot(map: L.Map, state: AppState) {
     },
     userAgent: navigator.userAgent,
     map: {
-      center: [center.lat, center.lng],
-      zoom: map.getZoom(),
+      center: ['<redacted>', '<redacted>'],
+      zoom: _map.getZoom(),
       bounds: {
-        south: bounds.getSouth(),
-        west: bounds.getWest(),
-        north: bounds.getNorth(),
-        east: bounds.getEast(),
+        south: '<redacted>',
+        west: '<redacted>',
+        north: '<redacted>',
+        east: '<redacted>',
       },
     },
     app: {
@@ -54,6 +81,11 @@ function buildSnapshot(map: L.Map, state: AppState) {
       userLanguages: state.userLanguages,
     },
     vectorMarkerCount: state.vectorMarkers?.length ?? 0,
+    activeMarker: activeMarkerEntry ? {
+      occurrenceKey: activeMarkerEntry.occurrenceKey,
+      taxonomy: activeMarkerEntry.taxonomy,
+    } : null,
+    loadedSpeciesSummary: loadedSpecies,
     ui: {
       gbifPanelOpen: document.getElementById('gbif-panel')?.classList.contains('open') ?? false,
       langPanelOpen: document.getElementById('lang-panel')?.classList.contains('open') ?? false,
@@ -286,14 +318,23 @@ export function initBugReport(map: L.Map, state: AppState, config: AppConfig): v
 
   fab.addEventListener('click', async () => {
     fab.disabled = true;
+    fab.classList.add('loading');
     setStatus('');
     lastReport = null;
     if (userMessage) userMessage.value = '';
     btnGithub?.classList.add('bug-report-github-disabled');
 
     try {
+      // Small delay to let the browser render the loading state
+      await new Promise(resolve => requestAnimationFrame(resolve));
+
+      if (state.userLocationMarker && map.getBounds().contains(state.userLocationMarker.getLatLng())) {
+        showErrorToast('Privacy alert: Your location is visible on the map. Please pan away to report a bug.');
+        return;
+      }
+
       state.syncStateToURL(map);
-      const shareUrl = window.location.href;
+      const shareUrl = state.getRedactedURL();
       const snapshot = buildSnapshot(map, state);
 
       const canvas = await html2canvas(document.body, {
@@ -375,6 +416,7 @@ export function initBugReport(map: L.Map, state: AppState, config: AppConfig): v
       );
     } finally {
       fab.disabled = false;
+      fab.classList.remove('loading');
     }
   });
 

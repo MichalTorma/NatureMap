@@ -2,7 +2,7 @@ import type L from 'leaflet';
 import type { AppState } from '../state';
 import type { HoverCardController } from './hover-card';
 import { buildTaxaTree, pruneTree, type TaxaNode } from '../map/taxonomy';
-import { resolveVernacularNames, vnCache } from '../map/gbif';
+import { resolveVernacularNames, vnCache, resolveWikidataInfo, negotiateTaxonNames } from '../map/gbif';
 import { getIconSvg } from './icons';
 
 // ─── Legend-local state ───────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ function createTaxonNameWrap(sciName: string, taxonKey?: number): HTMLSpanElemen
   return wrap;
 }
 
-function updateTaxonNameWrap(wrap: HTMLElement, userLanguages: string[]): void {
+async function updateTaxonNameWrap(wrap: HTMLElement, userLanguages: string[]): Promise<void> {
   const keyStr = wrap.dataset.taxonKey;
   const sci = wrap.dataset.scientific || '';
   const primaryEl = wrap.querySelector<HTMLElement>('.tree-name-primary');
@@ -54,6 +54,7 @@ function updateTaxonNameWrap(wrap: HTMLElement, userLanguages: string[]): void {
 
   if (!keyStr) {
     primaryEl.textContent = sci;
+    primaryEl.style.fontStyle = 'italic';
     sciEl.style.display = 'none';
     if (allEl) { allEl.textContent = ''; allEl.style.display = 'none'; }
     return;
@@ -61,10 +62,19 @@ function updateTaxonNameWrap(wrap: HTMLElement, userLanguages: string[]): void {
 
   const key = parseInt(keyStr, 10);
   const all = vnCache.get(key) || [];
-  const pickLc = (lang: string) => all.find(n => n.lang === lang)?.name;
+  const wiki = await resolveWikidataInfo(key, userLanguages);
+  const { best, subtitles } = negotiateTaxonNames(sci, userLanguages, all, wiki);
 
-  const activeName = pickLc(legendDisplayLang) || sci;
+  // Determine the name to show for the currently selected legend display language
+  const displayMatch = (best.lang === legendDisplayLang) 
+    ? best 
+    : subtitles.find(s => s.lang === legendDisplayLang);
+  
+  const activeName = displayMatch ? displayMatch.name : sci;
+  const isActiveSci = displayMatch ? displayMatch.isScientific : true;
+
   primaryEl.textContent = activeName;
+  primaryEl.style.fontStyle = isActiveSci ? 'italic' : 'normal';
 
   if (activeName !== sci && sci) {
     sciEl.textContent = sci;
@@ -75,9 +85,13 @@ function updateTaxonNameWrap(wrap: HTMLElement, userLanguages: string[]): void {
 
   if (allEl && userLanguages.length > 0) {
     const parts: string[] = [];
+    // Show all preferred languages in the small grey list
+    const allPreferred = [best, ...subtitles];
     for (const lc of userLanguages) {
-      const nm = pickLc(lc);
-      if (nm) parts.push(`${lc.toUpperCase()}\u00a0${nm}`);
+      const match = allPreferred.find(p => p.lang === lc);
+      if (match) {
+        parts.push(`${lc.toUpperCase()}\u00a0${match.name}`);
+      }
     }
     if (parts.length > 0) {
       allEl.textContent = parts.join(' · ');
@@ -100,7 +114,7 @@ async function applyLegendLanguageToBody(body: HTMLElement, userLanguages: strin
     .map(w => parseInt(w.dataset.taxonKey || '', 10))
     .filter(k => !Number.isNaN(k) && k > 0);
   await prefetchVernaculars(keys);
-  wraps.forEach(w => updateTaxonNameWrap(w, userLanguages));
+  await Promise.all(wraps.map(w => updateTaxonNameWrap(w, userLanguages)));
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -129,7 +143,10 @@ export function initLegend(state: AppState, hoverCard: HoverCardController) {
   const closeLegend = () => {
     vectorLegend?.classList.remove('open');
     legendToggle?.classList.remove('active');
-    if (!document.getElementById('gbif-panel')?.classList.contains('open')) {
+    if (
+      !document.getElementById('gbif-panel')?.classList.contains('open') &&
+      !document.getElementById('lang-panel')?.classList.contains('open')
+    ) {
       document.body.classList.remove('panel-active');
     }
   };
@@ -139,6 +156,14 @@ export function initLegend(state: AppState, hoverCard: HoverCardController) {
     else openLegend();
   });
   legendClose?.addEventListener('click', closeLegend);
+
+  document.addEventListener('click', (e) => {
+    if (!vectorLegend?.classList.contains('open')) return;
+    const t = e.target as Node;
+    if (vectorLegend.contains(t)) return;
+    if (legendToggle?.contains(t)) return;
+    closeLegend();
+  });
 
   // ── Resize ───────────────────────────────────────────────────────────────
   const STORAGE_KEY_LEGEND_WIDTH = 'naturemap_legend_width';
