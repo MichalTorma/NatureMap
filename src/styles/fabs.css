@@ -15,7 +15,6 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  pointer-events: auto;
 }
 
 .layer-stack-items {
@@ -26,6 +25,7 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 12px;
+  pointer-events: none;
 }
 
 .layer-stack-item {
