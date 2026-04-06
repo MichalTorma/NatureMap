@@ -8,12 +8,14 @@
   flex-direction: row;
   align-items: flex-end;
   gap: 12px;
+  pointer-events: none;
 }
 
 .menu-container {
   position: relative;
   display: flex;
   flex-direction: column;
+  pointer-events: auto;
 }
 
 .layer-stack-items {
@@ -170,6 +172,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
 }
 .layer-fab svg { width: 20px; height: 20px; }
 

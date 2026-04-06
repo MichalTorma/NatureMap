@@ -4,12 +4,14 @@
   bottom: 24px;
   left: 24px;
   z-index: 2500;
+  pointer-events: none;
 }
 
 .bug-report-fab-cluster {
   position: relative;
   display: inline-flex;
   align-items: flex-end;
+  pointer-events: auto;
 }
 
 .bug-report-fab {
@@ -27,6 +29,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
 }
 
 .bug-report-fab svg {
