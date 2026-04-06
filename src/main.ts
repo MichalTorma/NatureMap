@@ -26,7 +26,7 @@ async function initMap() {
   try {
     initIcons();
     initExternalStatusUi();
-    const response = await fetch('/config.json');
+    const response = await fetch('config.json');
     if (!response.ok) throw new Error('Failed to load config.json');
     const config = await response.json();
 
