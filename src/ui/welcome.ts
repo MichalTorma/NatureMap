@@ -1,36 +1,51 @@
-import { 
-  STORAGE_KEY_CENTER, 
-  STORAGE_KEY_ZOOM, 
-  STORAGE_KEY_LANGS, 
-  STORAGE_KEY_BASE, 
-  STORAGE_KEY_OVERLAYS 
-} from '../state';
-
 export function initWelcome() {
   const WELCOME_KEY = 'naturemap_welcomed';
   const welcomeCard = document.getElementById('welcome-card');
   const welcomeDismiss = document.getElementById('welcome-dismiss');
-  if (welcomeCard) {
-    if (localStorage.getItem(WELCOME_KEY)) {
-      welcomeCard.classList.add('hidden');
+  const welcomeDontShow = document.getElementById('welcome-dont-show') as HTMLInputElement;
+  const aboutBtn = document.getElementById('about-btn');
+
+  const showWelcome = () => {
+    welcomeCard?.classList.remove('hidden');
+  };
+
+  const hideWelcome = () => {
+    welcomeCard?.classList.add('hidden');
+    // Save preference: if checked, don't show on reload. 
+    // If unchecked, it will show again next time app starts.
+    if (welcomeDontShow?.checked) {
+      localStorage.setItem(WELCOME_KEY, '1');
     } else {
-      welcomeDismiss?.addEventListener('click', () => {
-        welcomeCard.classList.add('hidden');
-        localStorage.setItem(WELCOME_KEY, '1');
-      });
+      localStorage.removeItem(WELCOME_KEY);
     }
+  };
+
+  if (welcomeCard) {
+    // Check if we should show on first run
+    if (!localStorage.getItem(WELCOME_KEY)) {
+      showWelcome();
+    }
+
+    welcomeDismiss?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideWelcome();
+    });
+
+    // Close on backdrop click (optional but nice)
+    welcomeCard.addEventListener('click', (e) => {
+      if (e.target === welcomeCard) hideWelcome();
+    });
   }
 
-  // Reset All Settings
-  const ALL_STORAGE_KEYS = [
-    STORAGE_KEY_CENTER, 
-    STORAGE_KEY_ZOOM, 
-    STORAGE_KEY_LANGS, 
-    STORAGE_KEY_BASE, 
-    STORAGE_KEY_OVERLAYS, 
-    'gbif_history', 
-    WELCOME_KEY
-  ];
+  // Bind the settings menu "About" button
+  if (aboutBtn) {
+    aboutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showWelcome();
+    });
+  }
+
+  // Reset All Settings button logic (existing)
   const resetBtn = document.getElementById('reset-all-btn');
   if (resetBtn) {
     let confirmPending = false;
@@ -49,7 +64,16 @@ export function initWelcome() {
         return;
       }
       clearTimeout(confirmTimer);
-      ALL_STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
+      
+      // Clear specific keys instead of all for safety, but here we clear everything related to the app
+      localStorage.removeItem('naturemap_center');
+      localStorage.removeItem('naturemap_zoom');
+      localStorage.removeItem('naturemap_langs');
+      localStorage.removeItem('naturemap_base');
+      localStorage.removeItem('naturemap_overlays');
+      localStorage.removeItem('gbif_history');
+      localStorage.removeItem(WELCOME_KEY);
+      
       window.location.href = window.location.pathname;
     });
   }

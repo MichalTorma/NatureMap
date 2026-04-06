@@ -171,13 +171,22 @@
 
           <div class="layer-separator layer-stack-item" aria-hidden="true"></div>
 
-          <!-- Language Settings Row -->
           <div class="layer-row-item layer-stack-item">
             <div class="layer-name-chip chip">
               <span class="layer-name">Global Languages</span>
             </div>
             <button id="lang-fab" class="layer-fab lang-fab" aria-label="Languages" title="Language Configuration">
               <i data-lucide="languages"></i>
+            </button>
+          </div>
+
+          <!-- About Row -->
+          <div class="layer-row-item layer-stack-item">
+            <div class="layer-name-chip chip">
+              <span class="layer-name">About NatureMap</span>
+            </div>
+            <button id="about-btn" class="layer-fab about-fab" aria-label="About NatureMap" title="About NatureMap">
+              <i data-lucide="info"></i>
             </button>
           </div>
         </div>
@@ -407,16 +416,56 @@
     </div>
 
     <!-- First-visit welcome card -->
-    <div id="welcome-card" class="welcome-card">
+    <div id="welcome-card" class="welcome-card hidden">
       <div class="welcome-card-inner">
-        <h2>Welcome to NatureMap</h2>
-        <p>You're viewing live biodiversity data from <strong>GBIF</strong> — the Global Biodiversity Information Facility.</p>
-        <ul>
-          <li>Tap the <strong>layers button</strong> to switch base maps and toggle overlays</li>
-          <li><strong>Zoom in</strong> to explore individual observation records</li>
-          <li><strong>Share</strong> any view by copying the URL</li>
-        </ul>
-        <button id="welcome-dismiss" class="welcome-dismiss-btn">Get Started</button>
+        <div class="welcome-header">
+           <div class="welcome-logo">
+             <i data-lucide="hexagon"></i>
+           </div>
+           <h2>Welcome to NatureMap</h2>
+        </div>
+        
+        <div class="welcome-body">
+          <div class="welcome-section">
+            <h3>The Data Source</h3>
+            <p>You're viewing live biodiversity data from <a href="https://www.gbif.org" target="_blank" rel="noopener noreferrer"><strong>GBIF</strong></a> — the Global Biodiversity Information Facility. This open-access network provides anyone, anywhere, with data about all types of life on Earth.</p>
+          </div>
+
+          <div class="welcome-section">
+            <h3>Explore the Features</h3>
+            <ul class="welcome-features">
+              <li>
+                <div class="feature-icon"><i data-lucide="zoom-in"></i></div>
+                <div class="feature-text">
+                  <strong>High Precision</strong>
+                  <p>Zoom in (level 12+) to see individual vector markers with exact coordinates and timestamps.</p>
+                </div>
+              </li>
+              <li>
+                <div class="feature-icon"><i data-lucide="layers"></i></div>
+                <div class="feature-text">
+                  <strong>Flexible Layers</strong>
+                  <p>Switch base maps, toggle conservation overlays, and customize biodiversity heatmap styles.</p>
+                </div>
+              </li>
+              <li>
+                <div class="feature-icon"><i data-lucide="book-open"></i></div>
+                <div class="feature-text">
+                  <strong>Deep Context</strong>
+                  <p>Tap any marker to explore species taxonomies, vernacular names, and live Wikipedia previews.</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="welcome-footer">
+          <label class="welcome-checkbox-label">
+            <input type="checkbox" id="welcome-dont-show" checked>
+            <span>Don't show this again</span>
+          </label>
+          <button id="welcome-dismiss" class="welcome-dismiss-btn">Get Started</button>
+        </div>
       </div>
     </div>
     <canvas id="style-tester" width="256" height="256" style="display: none;"></canvas>
