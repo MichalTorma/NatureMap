@@ -238,16 +238,35 @@ export interface WikiInfo {
   type: 'wikipedia' | 'wikidata',
   labels: Record<string, string> 
 }
+/** IDs currently being fetched in a SPARQL batch to prevent redundant/rest API calls. */
+export const pendingWikidataIds = new Set<number>();
 export const wikidataCache = new Map<number, WikiInfo | null>();
 
 export async function resolveWikidataInfo(taxonKey: number, userLanguages: string[] = ['en']): Promise<WikiInfo | null> {
   if (wikidataCache.has(taxonKey)) return wikidataCache.get(taxonKey)!;
+  
+  // If this ID is currently being fetched in a SPARQL batch, wait a bit and retry from cache
+  if (pendingWikidataIds.has(taxonKey)) {
+    let attempts = 0;
+    while (attempts < 10 && pendingWikidataIds.has(taxonKey)) {
+      await new Promise(r => setTimeout(r, 300));
+      if (wikidataCache.has(taxonKey)) return wikidataCache.get(taxonKey)!;
+      attempts++;
+    }
+  }
+
   try {
     const langParam = encodeURIComponent(userLanguages.join('|'));
     const searchParam = encodeURIComponent(`haswbstatement:P846=${taxonKey}`);
     const url = `https://www.wikidata.org/w/api.php?action=query&prop=pageimages|info&inprop=url&generator=search&gsrsearch=${searchParam}&piprop=thumbnail&pithumbsize=600&format=json&origin=*`;
     
     const res = await fetch(url);
+    if (res.status === 429) {
+      console.warn(`Wikidata 429 (Rate Limit) for ${taxonKey}. Throttling...`);
+      await new Promise(r => setTimeout(r, 2000));
+      // Optionally retry once, but for now we fallback to null to avoid hang
+      return null;
+    }
     const data = await res.json();
     const pages = data.query?.pages;
     if (!pages) return null;
