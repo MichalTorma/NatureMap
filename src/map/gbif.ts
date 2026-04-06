@@ -243,8 +243,10 @@ export const wikidataCache = new Map<number, WikiInfo | null>();
 export async function resolveWikidataInfo(taxonKey: number, userLanguages: string[] = ['en']): Promise<WikiInfo | null> {
   if (wikidataCache.has(taxonKey)) return wikidataCache.get(taxonKey)!;
   try {
-    const langParam = userLanguages.join('|');
-    const url = `https://www.wikidata.org/w/api.php?action=query&prop=pageimages|info&inprop=url&generator=search&gsrsearch=haswbstatement:P846=${taxonKey}&piprop=thumbnail&pithumbsize=600&format=json&origin=*`;
+    const langParam = encodeURIComponent(userLanguages.join('|'));
+    const searchParam = encodeURIComponent(`haswbstatement:P846=${taxonKey}`);
+    const url = `https://www.wikidata.org/w/api.php?action=query&prop=pageimages|info&inprop=url&generator=search&gsrsearch=${searchParam}&piprop=thumbnail&pithumbsize=600&format=json&origin=*`;
+    
     const res = await fetch(url);
     const data = await res.json();
     const pages = data.query?.pages;
@@ -259,7 +261,8 @@ export async function resolveWikidataInfo(taxonKey: number, userLanguages: strin
     const labels: Record<string, string> = {};
     const qid = page.title; // generator=search with P846 search returns Qid as title
     if (qid.startsWith('Q')) {
-      const entityRes = await fetch(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=labels&languages=${langParam}&format=json&origin=*`);
+      const entityUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=labels&languages=${langParam}&format=json&origin=*`;
+      const entityRes = await fetch(entityUrl);
       const entityData = await entityRes.json();
       const entityEntry = entityData.entities?.[qid];
       if (entityEntry && entityEntry.labels) {

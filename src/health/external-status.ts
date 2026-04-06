@@ -38,8 +38,7 @@ const GBIF_REST_URL =
 /** Single world tile; same endpoint family as the map layer. */
 const GBIF_MAP_TILE_URL =
   'https://api.gbif.org/v2/map/occurrence/density/0/0/0@1x.png?srs=EPSG:3857&style=classic.poly';
-const WIKIDATA_URL =
-  'https://www.wikidata.org/w/api.php?action=query&meta=siteinfo&format=json&origin=*';
+const WIKIDATA_URL = 'https://www.wikidata.org/w/api.php?action=query&meta=siteinfo&format=json&origin=*';
 
 const PROBE_TIMEOUT_MS = 10_000;
 
